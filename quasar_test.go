@@ -44,13 +44,9 @@ func (mqt *MockOverlayNetwork) SendUpdate(id PeerID, f Filters) {
 	mqt.network.updateChannels[id] <- update
 }
 
-func (mqt *MockOverlayNetwork) Start() {
+func (mqt *MockOverlayNetwork) Start() {}
 
-}
-
-func (mqt *MockOverlayNetwork) Stop() {
-
-}
+func (mqt *MockOverlayNetwork) Stop() {}
 
 func TestNewEvent(t *testing.T) {
 	event := NewEvent("test topic", "test message")
@@ -84,7 +80,7 @@ func TestHashTopic(t *testing.T) {
 
 	// decode expected digest
 	expectedHex := []byte("4e0123796bee558240c5945ac9aff553fcc6256d")
-	expected := TopicDigest{}
+	expected := Hash160Digest{}
 	expectedBytesLen, err := hex.Decode(expected[:], expectedHex)
 	if err != nil {
 		t.Fatal(err)
@@ -93,9 +89,9 @@ func TestHashTopic(t *testing.T) {
 		t.Errorf("Incorrect digest size! %i", expectedBytesLen)
 	}
 
-	digest := HashTopic(topic)
+	digest := Hash160(topic)
 	if *digest != expected {
-		t.Errorf("HashTopic failed!")
+		t.Errorf("Hash160 failed!")
 	}
 }
 
