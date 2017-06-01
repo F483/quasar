@@ -13,50 +13,51 @@ type MockNetwork struct {
 	eventChannels  map[PeerID]chan Event
 }
 
-type MockOverlayNetwork struct {
+type MockOverlay struct {
 	id      PeerID
 	network MockNetwork
 }
 
-func (mqt *MockOverlayNetwork) Id() PeerID {
+func (mqt *MockOverlay) Id() PeerID {
 	return mqt.id
 }
 
-func (mqt *MockOverlayNetwork) ConnectedPeers() []PeerID {
+func (mqt *MockOverlay) ConnectedPeers() []PeerID {
 	return mqt.network.connections[mqt.id]
 }
 
-func (mqt *MockOverlayNetwork) ReceivedEventChannel() chan Event {
+func (mqt *MockOverlay) ReceivedEventChannel() chan Event {
 	return mqt.network.eventChannels[mqt.id]
 
 }
 
-func (mqt *MockOverlayNetwork) ReceivedUpdateChannel() chan Update {
+func (mqt *MockOverlay) ReceivedUpdateChannel() chan Update {
 	return mqt.network.updateChannels[mqt.id]
 }
 
-func (mqt *MockOverlayNetwork) SendEvent(id PeerID, e Event) {
+func (mqt *MockOverlay) SendEvent(id PeerID, e Event) {
 	mqt.network.eventChannels[id] <- e
 }
 
-func (mqt *MockOverlayNetwork) SendUpdate(id PeerID, f Filters) {
-	update := Update{peerId: &mqt.id, filters: &f}
+func (mqt *MockOverlay) SendUpdate(id PeerID, f FilterStack) {
+	update := Update{peerId: &mqt.id, filters: f}
 	mqt.network.updateChannels[id] <- update
 }
 
-func (mqt *MockOverlayNetwork) Start() {}
+func (mqt *MockOverlay) Start() {}
 
-func (mqt *MockOverlayNetwork) Stop() {}
+func (mqt *MockOverlay) Stop() {}
 
 func TestNewEvent(t *testing.T) {
-	event := NewEvent("test topic", "test message")
+	ttl := uint32(42)
+	event := NewEvent("test topic", "test message", ttl)
 	if event == nil {
 		t.Errorf("Expected event!")
 	}
 	if event.message != "test message" {
 		t.Errorf("Event message not set!")
 	}
-	if event.ttl != TTL {
+	if event.ttl != ttl {
 		t.Errorf("Event ttl not set!")
 	}
 	if event.publishers == nil && len(event.publishers) != 0 {
@@ -96,7 +97,17 @@ func TestHashTopic(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := NewQuasar(nil, 65536, 0.000001)
+	q := NewQuasar(nil, Config{
+		DefaultEventTTL:        1024,
+		InputDispatcherDelay:   1,
+		PeerFiltersExpire:      180,
+		PublishFiltersInterval: 60,
+		HistoryLimit:           65536,
+		HistoryAccuracy:        0.000001,
+		FilterStackLimit:       65536,
+		FilterStackDepth:       1024,
+		FilterStackAccuracy:    0.000001,
+	})
 
 	a := make(chan string)
 	q.Subscribe("a", a)

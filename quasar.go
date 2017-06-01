@@ -10,18 +10,23 @@ import (
 
 // FIXME messages and topics should be byte slices
 
-// FIXME move constants to config
-const TTL uint32 = 128        // max event hops before being dropped
-const DEPTH uint32 = 128      // attenuated bloom filter depth
-const SIZE uint32 = 512       // bloom filter size
-const REFRESH uint32 = 600    // interval when own filters are published
-const EXPIRE uint32 = 660     // time until peer filters become stale
-const DELAY time.Duration = 1 // event/update dispatcher sleep time in ms
-
-type Filters [DEPTH][SIZE]byte
 type Hash160Digest [20]byte // ripemd160(sha256(topic))
 type PubKey [65]byte        // compressed secp256k1 public key
 type PeerID PubKey          // pubkey to enable authentication/encryption
+
+type FilterStack interface {
+}
+
+type OverlayNetwork interface {
+	Id() PeerID
+	ConnectedPeers() []PeerID
+	ReceivedEventChannel() chan *Event
+	ReceivedUpdateChannel() chan *Update
+	SendEvent(PeerID, Event)
+	SendUpdate(PeerID, FilterStack)
+	Start()
+	Stop()
+}
 
 type Event struct {
 	topicDigest *Hash160Digest
@@ -32,40 +37,39 @@ type Event struct {
 
 type Update struct {
 	peerId  *PeerID
-	filters *Filters
+	filters FilterStack
 }
 
 type Peer struct {
 	id        *PeerID
-	filters   *Filters
+	filters   FilterStack
 	timestamp int64
 }
 
-type OverlayNetwork interface {
-	Id() PeerID
-	ConnectedPeers() []PeerID
-	ReceivedEventChannel() chan *Event
-	ReceivedUpdateChannel() chan *Update
-	SendEvent(PeerID, Event)
-	SendUpdate(PeerID, Filters)
-	Start()
-	Stop()
+type Config struct {
+	DefaultEventTTL        uint32        // decremented every hop
+	InputDispatcherDelay   time.Duration // in ms
+	PeerFiltersExpire      uint32        // in seconds
+	PublishFiltersInterval uint32        // in seconds
+	HistoryLimit           uint32
+	HistoryAccuracy        float64 // chance of error
+	FilterStackLimit       uint32
+	FilterStackDepth       uint32
+	FilterStackAccuracy    float64
 }
 
 type Quasar struct {
-	network    OverlayNetwork
-	subs       map[string][]chan string // topic -> subscribers
-	subsMutex  *sync.RWMutex
-	peers      []Peer // know peer filters and time last seen
-	peersMutex *sync.Mutex
-	history    dejavu.DejaVu
-
-	cachedFilters         *Filters // own filters (subs + peers)
-	cachedFiltersMutex    *sync.RWMutex
+	network               OverlayNetwork
+	subs                  map[string][]chan string // topic -> subscribers
+	subsMutex             *sync.RWMutex
+	peers                 []Peer
+	peersMutex            *sync.Mutex
+	history               dejavu.DejaVu // memory of past events
+	config                Config
+	filters               FilterStack              // own (subs + peers)
 	cachedSubDigests      map[Hash160Digest]string // digest -> topic
 	cachedSubDigestsMutex *sync.RWMutex
-	stopEventDispatcher   chan bool
-	stopUpdateDispatcher  chan bool
+	stopInputDispatcher   chan bool
 	stopFilterPropagation chan bool
 }
 
@@ -75,20 +79,19 @@ func Hash160(topic string) *Hash160Digest {
 	return &digest
 }
 
-func NewEvent(topic string, message string) *Event {
+// NewEvent greats a new Event for given data.
+func NewEvent(topic string, message string, ttl uint32) *Event {
 	return &Event{
 		topicDigest: Hash160(topic),
 		message:     message,
 		publishers:  []PeerID{},
-		ttl:         TTL,
+		ttl:         ttl,
 	}
 }
 
-func NewQuasar(
-	network OverlayNetwork, historyLimit uint32, historyAccuracy float64,
-) *Quasar {
+func NewQuasar(network OverlayNetwork, config Config) *Quasar {
 
-	djv := dejavu.NewProbabilistic(historyLimit, historyAccuracy)
+	djv := dejavu.NewProbabilistic(config.HistoryLimit, config.HistoryAccuracy)
 	return &Quasar{
 		network:               network,
 		subs:                  make(map[string][]chan string),
@@ -96,12 +99,11 @@ func NewQuasar(
 		peers:                 make([]Peer, 0),
 		peersMutex:            new(sync.Mutex),
 		history:               djv,
-		cachedFilters:         new(Filters),
-		cachedFiltersMutex:    new(sync.RWMutex),
+		config:                config,
+		filters:               nil, // FIXME implement filtres
 		cachedSubDigests:      make(map[Hash160Digest]string),
 		cachedSubDigestsMutex: new(sync.RWMutex),
-		stopUpdateDispatcher:  nil, // set on Start() call
-		stopEventDispatcher:   nil, // set on Start() call
+		stopInputDispatcher:   nil, // set on Start() call
 		stopFilterPropagation: nil, // set on Start() call
 	}
 }
@@ -116,7 +118,7 @@ func (q *Quasar) rebuildCaches() {
 	}
 	q.cachedSubDigestsMutex.Unlock()
 
-	// TODO rebuild q.cachedFilters
+	// TODO rebuild q.filters
 }
 
 func (q *Quasar) processUpdate(update *Update) {
@@ -136,7 +138,7 @@ func (q *Quasar) deliver(event *Event) {
 }
 
 func (q *Quasar) Publish(topic string, message string) {
-	q.processEvent(NewEvent(topic, message))
+	q.processEvent(NewEvent(topic, message, q.config.DefaultEventTTL))
 }
 
 func (q *Quasar) processEvent(event *Event) {
@@ -150,27 +152,17 @@ func (q *Quasar) processEvent(event *Event) {
 	// TODO propagate
 }
 
-func (q *Quasar) dispatchUpdates() {
+func (q *Quasar) dispatchInput() {
 	for {
 		select {
 		case update := <-q.network.ReceivedUpdateChannel():
-			q.processUpdate(update)
-		case <-q.stopUpdateDispatcher:
-			return // TODO confirm stopped
-		}
-		time.Sleep(DELAY * time.Millisecond)
-	}
-}
-
-func (q *Quasar) dispatchEvents() {
-	for {
-		select {
+			go q.processUpdate(update)
 		case event := <-q.network.ReceivedEventChannel():
-			q.processEvent(event)
-		case <-q.stopEventDispatcher:
+			go q.processEvent(event)
+		case <-q.stopInputDispatcher:
 			return // TODO confirm stopped
 		}
-		time.Sleep(DELAY * time.Millisecond)
+		time.Sleep(q.config.InputDispatcherDelay * time.Millisecond)
 	}
 }
 
@@ -181,19 +173,16 @@ func (q *Quasar) propagateFilters() {
 // Start quasar system
 func (q *Quasar) Start() {
 	q.network.Start()
-	q.stopUpdateDispatcher = make(chan bool)
-	q.stopEventDispatcher = make(chan bool)
+	q.stopInputDispatcher = make(chan bool)
 	q.stopFilterPropagation = make(chan bool)
-	go q.dispatchUpdates()
-	go q.dispatchEvents()
+	go q.dispatchInput()
 	go q.propagateFilters()
 }
 
 // Stop quasar system
 func (q *Quasar) Stop() {
 	q.network.Stop()
-	q.stopEventDispatcher <- true
-	q.stopUpdateDispatcher <- true
+	q.stopInputDispatcher <- true
 	q.stopFilterPropagation <- true
 }
 
@@ -210,7 +199,7 @@ func (q *Quasar) Subscribe(topic string, msgReceiver chan string) {
 	go q.rebuildCaches()
 }
 
-// Unsubscribe from message receiver channel from topic. If nil channel is
+// Unsubscribe message receiver channel from topic. If nil receiver channel is
 // provided all message receiver channels for given topic will be removed.
 func (q *Quasar) Unsubscribe(topic string, msgReceiver chan string) {
 	q.subsMutex.Lock()
