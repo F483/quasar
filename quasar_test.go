@@ -96,7 +96,7 @@ func TestHashTopic(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := NewQuasar(nil)
+	q := NewQuasar(nil, 65536, 0.000001)
 
 	a := make(chan string)
 	q.Subscribe("a", a)
