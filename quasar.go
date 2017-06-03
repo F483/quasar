@@ -1,7 +1,6 @@
 package quasar
 
 import (
-	"github.com/btcsuite/btcutil"
 	"github.com/f483/dejavu"
 	"sort"
 	"sync"
@@ -10,20 +9,13 @@ import (
 
 // FIXME messages and topics should be byte slices
 
-type Hash160Digest [20]byte // ripemd160(sha256(topic))
-type PubKey [65]byte        // compressed secp256k1 public key
-type PeerID PubKey          // pubkey to enable authentication/encryption
-
-type FilterStack interface {
-}
-
 type OverlayNetwork interface {
 	Id() PeerID
 	ConnectedPeers() []PeerID
 	ReceivedEventChannel() chan *Event
 	ReceivedUpdateChannel() chan *Update
 	SendEvent(PeerID, Event)
-	SendUpdate(PeerID, FilterStack)
+	SendUpdate(PeerID, *Filters)
 	Start()
 	Stop()
 }
@@ -37,13 +29,13 @@ type Event struct {
 
 type Update struct {
 	peerId  *PeerID
-	filters FilterStack
+	filters *Filters
 }
 
 type Peer struct {
 	id        *PeerID
-	filters   FilterStack
-	timestamp int64
+	filters   *Filters
+	timestamp int64 // unixtime
 }
 
 type Config struct {
@@ -53,9 +45,9 @@ type Config struct {
 	PublishFiltersInterval uint32        // in seconds
 	HistoryLimit           uint32
 	HistoryAccuracy        float64 // chance of error
-	FilterStackLimit       uint32
-	FilterStackDepth       uint32
-	FilterStackAccuracy    float64
+	FiltersDepth           uint32
+	FiltersLimit           uint32
+	FiltersAccuracy        float64
 }
 
 type Quasar struct {
@@ -66,17 +58,11 @@ type Quasar struct {
 	peersMutex            *sync.Mutex
 	history               dejavu.DejaVu // memory of past events
 	config                Config
-	filters               FilterStack              // own (subs + peers)
+	filters               *Filters                 // own (subs + peers)
 	cachedSubDigests      map[Hash160Digest]string // digest -> topic
 	cachedSubDigestsMutex *sync.RWMutex
 	stopInputDispatcher   chan bool
 	stopFilterPropagation chan bool
-}
-
-func Hash160(topic string) *Hash160Digest {
-	digest := Hash160Digest{}
-	copy(digest[:], btcutil.Hash160([]byte(topic)))
-	return &digest
 }
 
 // NewEvent greats a new Event for given data.
@@ -89,18 +75,18 @@ func NewEvent(topic string, message string, ttl uint32) *Event {
 	}
 }
 
-func NewQuasar(network OverlayNetwork, config Config) *Quasar {
+func NewQuasar(network OverlayNetwork, c Config) *Quasar {
 
-	djv := dejavu.NewProbabilistic(config.HistoryLimit, config.HistoryAccuracy)
+	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
 		network:               network,
 		subs:                  make(map[string][]chan string),
 		subsMutex:             new(sync.RWMutex),
 		peers:                 make([]Peer, 0),
 		peersMutex:            new(sync.Mutex),
-		history:               djv,
-		config:                config,
-		filters:               nil, // FIXME implement filtres
+		history:               d,
+		config:                c,
+		filters:               nil,
 		cachedSubDigests:      make(map[Hash160Digest]string),
 		cachedSubDigestsMutex: new(sync.RWMutex),
 		stopInputDispatcher:   nil, // set on Start() call

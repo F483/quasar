@@ -1,7 +1,6 @@
 package quasar
 
 import (
-	"encoding/hex"
 	"reflect"
 	"testing"
 )
@@ -39,7 +38,7 @@ func (mqt *MockOverlay) SendEvent(id PeerID, e Event) {
 	mqt.network.eventChannels[id] <- e
 }
 
-func (mqt *MockOverlay) SendUpdate(id PeerID, f FilterStack) {
+func (mqt *MockOverlay) SendUpdate(id PeerID, f *Filters) {
 	update := Update{peerId: &mqt.id, filters: f}
 	mqt.network.updateChannels[id] <- update
 }
@@ -68,34 +67,6 @@ func TestNewEvent(t *testing.T) {
 	}
 }
 
-func TestHashTopic(t *testing.T) {
-
-	// decode topic
-	topicHex := []byte("f483")
-	topicBytes := make([]byte, hex.DecodedLen(len(topicHex)))
-	topicBytesLen, err := hex.Decode(topicBytes, topicHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-	topic := string(topicBytes[:topicBytesLen])
-
-	// decode expected digest
-	expectedHex := []byte("4e0123796bee558240c5945ac9aff553fcc6256d")
-	expected := Hash160Digest{}
-	expectedBytesLen, err := hex.Decode(expected[:], expectedHex)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if expectedBytesLen != 20 {
-		t.Errorf("Incorrect digest size! %i", expectedBytesLen)
-	}
-
-	digest := Hash160(topic)
-	if *digest != expected {
-		t.Errorf("Hash160 failed!")
-	}
-}
-
 func TestSubscriptions(t *testing.T) {
 	q := NewQuasar(nil, Config{
 		DefaultEventTTL:        1024,
@@ -104,9 +75,9 @@ func TestSubscriptions(t *testing.T) {
 		PublishFiltersInterval: 60,
 		HistoryLimit:           65536,
 		HistoryAccuracy:        0.000001,
-		FilterStackLimit:       65536,
-		FilterStackDepth:       1024,
-		FilterStackAccuracy:    0.000001,
+		FiltersDepth:           1024,
+		FiltersLimit:           65536,
+		FiltersAccuracy:        0.000001,
 	})
 
 	a := make(chan string)
