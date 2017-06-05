@@ -69,15 +69,15 @@ func TestNewEvent(t *testing.T) {
 
 func TestSubscriptions(t *testing.T) {
 	q := NewQuasar(nil, Config{
-		DefaultEventTTL:        1024,
-		InputDispatcherDelay:   1,
-		PeerFiltersExpire:      180,
-		PublishFiltersInterval: 60,
-		HistoryLimit:           65536,
-		HistoryAccuracy:        0.000001,
-		FiltersDepth:           1024,
-		FiltersM:               8192, // m 1k
-		FiltersK:               6,    // hashes
+		DefaultEventTTL:     1024,
+		DispatcherDelay:     1,
+		PeerFiltersExpire:   180,
+		PropagationInterval: 60,
+		HistoryLimit:        65536,
+		HistoryAccuracy:     0.000001,
+		FiltersDepth:        1024,
+		FiltersM:            8192, // m 1k
+		FiltersK:            6,    // hashes
 	})
 
 	a := make(chan []byte)

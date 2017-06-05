@@ -37,29 +37,29 @@ type peer struct {
 }
 
 type Config struct {
-	DefaultEventTTL        uint32        // decremented every hop
-	InputDispatcherDelay   time.Duration // in ms
-	PeerFiltersExpire      uint32        // in seconds
-	PublishFiltersInterval uint32        // in seconds
-	HistoryLimit           uint32        // entries remembered
-	HistoryAccuracy        float64       // chance of error
-	FiltersDepth           uint32        // filter stack height
-	FiltersM               uint32        // filter size in bits
-	FiltersK               uint32        // number of hashes
+	DefaultEventTTL     uint32        // decremented every hop
+	DispatcherDelay     time.Duration // in ms
+	PeerFiltersExpire   uint32        // in seconds
+	PropagationInterval uint32        // in seconds
+	HistoryLimit        uint32        // entries remembered
+	HistoryAccuracy     float64       // chance of error
+	FiltersDepth        uint32        // filter stack height
+	FiltersM            uint32        // filter size in bits
+	FiltersK            uint32        // number of hashes
 }
 
 type Quasar struct {
-	network               overlayNetwork
-	topicSubscribers      map[hash160digest][]chan []byte // digest -> subscribers
-	topicDigests          map[hash160digest][]byte        // digest -> topic
-	topicMutex            *sync.RWMutex
-	peers                 []peer
-	peersMutex            *sync.Mutex
-	history               dejavu.DejaVu // memory of past events
-	config                Config
-	filters               [][]byte // own (subs + peers)
-	stopInputDispatcher   chan bool
-	stopFilterPropagation chan bool
+	network         overlayNetwork
+	subscribers     map[hash160digest][]chan []byte
+	topics          map[hash160digest][]byte
+	mutex           *sync.RWMutex
+	peers           []peer
+	peersMutex      *sync.Mutex
+	history         dejavu.DejaVu // memory of past events
+	config          Config
+	filters         [][]byte // own (subs + peers)
+	stopDispatcher  chan bool
+	stopPropagation chan bool
 }
 
 func newEvent(topic []byte, message []byte, ttl uint32) *event {
@@ -73,20 +73,19 @@ func newEvent(topic []byte, message []byte, ttl uint32) *event {
 }
 
 func NewQuasar(network overlayNetwork, c Config) *Quasar {
-
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
-		network:               network,
-		topicSubscribers:      make(map[hash160digest][]chan []byte),
-		topicDigests:          make(map[hash160digest][]byte),
-		topicMutex:            new(sync.RWMutex),
-		peers:                 make([]peer, 0),
-		peersMutex:            new(sync.Mutex),
-		history:               d,
-		config:                c,
-		filters:               nil,
-		stopInputDispatcher:   nil, // set on Start() call
-		stopFilterPropagation: nil, // set on Start() call
+		network:         network,
+		subscribers:     make(map[hash160digest][]chan []byte),
+		topics:          make(map[hash160digest][]byte),
+		mutex:           new(sync.RWMutex),
+		peers:           make([]peer, 0),
+		peersMutex:      new(sync.Mutex),
+		history:         d,
+		config:          c,
+		filters:         nil,
+		stopDispatcher:  nil, // set on Start() call
+		stopPropagation: nil, // set on Start() call
 	}
 }
 
@@ -95,13 +94,13 @@ func (q *Quasar) processUpdate(u *update) {
 }
 
 func (q *Quasar) deliver(e *event) {
-	q.topicMutex.RLock()
-	if receivers, ok := q.topicSubscribers[*e.topicDigest]; ok {
+	q.mutex.RLock()
+	if receivers, ok := q.subscribers[*e.topicDigest]; ok {
 		for _, receiver := range receivers {
 			receiver <- e.message
 		}
 	}
-	q.topicMutex.RUnlock()
+	q.mutex.RUnlock()
 }
 
 func (q *Quasar) Publish(topic []byte, message []byte) {
@@ -126,10 +125,10 @@ func (q *Quasar) dispatchInput() {
 			go q.processUpdate(update)
 		case e := <-q.network.ReceivedEventChannel():
 			go q.processEvent(e)
-		case <-q.stopInputDispatcher:
+		case <-q.stopDispatcher:
 			return // TODO confirm stopped
 		}
-		time.Sleep(q.config.InputDispatcherDelay * time.Millisecond)
+		time.Sleep(q.config.DispatcherDelay * time.Millisecond)
 	}
 }
 
@@ -140,8 +139,8 @@ func (q *Quasar) propagateFilters() {
 // Start quasar system
 func (q *Quasar) Start() {
 	q.network.Start()
-	q.stopInputDispatcher = make(chan bool)
-	q.stopFilterPropagation = make(chan bool)
+	q.stopDispatcher = make(chan bool)
+	q.stopPropagation = make(chan bool)
 	go q.dispatchInput()
 	go q.propagateFilters()
 }
@@ -149,41 +148,39 @@ func (q *Quasar) Start() {
 // Stop quasar system
 func (q *Quasar) Stop() {
 	q.network.Stop()
-	q.stopInputDispatcher <- true
-	q.stopFilterPropagation <- true
+	q.stopDispatcher <- true
+	q.stopPropagation <- true
 }
 
 // Subscribe provided message receiver channel to given topic.
-func (q *Quasar) Subscribe(topic []byte, msgReceiver chan []byte) {
-
+func (q *Quasar) Subscribe(topic []byte, receiver chan []byte) {
 	digest := hash160(topic)
-	q.topicMutex.Lock()
-
-	receivers, ok := q.topicSubscribers[digest]
+	q.mutex.Lock()
+	receivers, ok := q.subscribers[digest]
 	if ok != true { // new subscription
-		q.topicSubscribers[digest] = []chan []byte{msgReceiver}
-		q.topicDigests[digest] = topic
+		q.subscribers[digest] = []chan []byte{receiver}
+		q.topics[digest] = topic
 	} else { // append to existing subscribers
-		q.topicSubscribers[digest] = append(receivers, msgReceiver)
+		q.subscribers[digest] = append(receivers, receiver)
 	}
-
-	q.topicMutex.Unlock()
+	q.mutex.Unlock()
 }
 
-// Unsubscribe message receiver channel from topic. If nil receiver channel is
-// provided all message receiver channels for given topic will be removed.
-func (q *Quasar) Unsubscribe(topic []byte, msgReceiver chan []byte) {
+// Unsubscribe message receiver channel from topic. If nil receiver
+// channel is provided all message receiver channels for given topic
+// will be removed.
+func (q *Quasar) Unsubscribe(topic []byte, receiver chan []byte) {
 
 	digest := hash160(topic)
-	q.topicMutex.Lock()
-	receivers, ok := q.topicSubscribers[digest]
+	q.mutex.Lock()
+	receivers, ok := q.subscribers[digest]
 
 	// remove specific message receiver
-	if ok && msgReceiver != nil {
+	if ok && receiver != nil {
 		for i, v := range receivers {
-			if v == msgReceiver {
+			if v == receiver {
 				receivers = append(receivers[:i], receivers[i+1:]...)
-				q.topicSubscribers[digest] = receivers
+				q.subscribers[digest] = receivers
 				break
 			}
 		}
@@ -191,34 +188,34 @@ func (q *Quasar) Unsubscribe(topic []byte, msgReceiver chan []byte) {
 
 	// remove sub key if no specific message
 	// receiver provided or no message receiver remaining
-	if ok && (msgReceiver == nil || len(q.topicSubscribers[digest]) == 0) {
-		delete(q.topicSubscribers, digest)
-		delete(q.topicDigests, digest)
+	if ok && (receiver == nil || len(q.subscribers[digest]) == 0) {
+		delete(q.subscribers, digest)
+		delete(q.topics, digest)
 	}
-	q.topicMutex.Unlock()
+	q.mutex.Unlock()
 }
 
 // Subscribers retruns message receivers for given topic.
 func (q *Quasar) Subscribers(topic []byte) []chan []byte {
 	digest := hash160(topic)
 	results := []chan []byte{}
-	q.topicMutex.RLock()
-	if receivers, ok := q.topicSubscribers[digest]; ok {
+	q.mutex.RLock()
+	if receivers, ok := q.subscribers[digest]; ok {
 		results = append(results, receivers...)
 	}
-	q.topicMutex.RUnlock()
+	q.mutex.RUnlock()
 	return results
 }
 
 // SubscribedTopics retruns a slice of currently subscribed topics.
 func (q *Quasar) Subscriptions() [][]byte {
-	q.topicMutex.RLock()
-	topics := make([][]byte, len(q.topicDigests))
+	q.mutex.RLock()
+	topics := make([][]byte, len(q.topics))
 	i := 0
-	for _, topic := range q.topicDigests {
+	for _, topic := range q.topics {
 		topics[i] = topic
 		i++
 	}
-	q.topicMutex.RUnlock()
+	q.mutex.RUnlock()
 	return topics
 }
