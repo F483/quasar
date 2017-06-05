@@ -28,7 +28,7 @@ func TestHash160(t *testing.T) {
 	}
 
 	digest := hash160(topic)
-	if *digest != expected {
+	if digest != expected {
 		t.Errorf("Hash160 failed!")
 	}
 }
