@@ -14,7 +14,7 @@ func TestHash160(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	topic := string(topicBytes[:topicBytesLen])
+	topic := topicBytes[:topicBytesLen]
 
 	// decode expected digest
 	expectedHex := []byte("4e0123796bee558240c5945ac9aff553fcc6256d")

@@ -2,12 +2,9 @@ package quasar
 
 import (
 	"github.com/f483/dejavu"
-	"sort"
 	"sync"
 	"time"
 )
-
-// FIXME messages and topics should be byte slices
 
 type overlayNetwork interface {
 	Id() pubkey
@@ -54,7 +51,7 @@ type Config struct {
 type Quasar struct {
 	network               overlayNetwork
 	topicSubscribers      map[hash160digest][]chan []byte // digest -> subscribers
-	topicDigests          map[hash160digest]string        // digest -> topic
+	topicDigests          map[hash160digest][]byte        // digest -> topic
 	topicMutex            *sync.RWMutex
 	peers                 []peer
 	peersMutex            *sync.Mutex
@@ -65,7 +62,7 @@ type Quasar struct {
 	stopFilterPropagation chan bool
 }
 
-func newEvent(topic string, message []byte, ttl uint32) *event {
+func newEvent(topic []byte, message []byte, ttl uint32) *event {
 	digest := hash160(topic)
 	return &event{
 		topicDigest: &digest,
@@ -81,7 +78,7 @@ func NewQuasar(network overlayNetwork, c Config) *Quasar {
 	return &Quasar{
 		network:               network,
 		topicSubscribers:      make(map[hash160digest][]chan []byte),
-		topicDigests:          make(map[hash160digest]string),
+		topicDigests:          make(map[hash160digest][]byte),
 		topicMutex:            new(sync.RWMutex),
 		peers:                 make([]peer, 0),
 		peersMutex:            new(sync.Mutex),
@@ -107,7 +104,7 @@ func (q *Quasar) deliver(e *event) {
 	q.topicMutex.RUnlock()
 }
 
-func (q *Quasar) Publish(topic string, message []byte) {
+func (q *Quasar) Publish(topic []byte, message []byte) {
 	q.processEvent(newEvent(topic, message, q.config.DefaultEventTTL))
 }
 
@@ -157,7 +154,7 @@ func (q *Quasar) Stop() {
 }
 
 // Subscribe provided message receiver channel to given topic.
-func (q *Quasar) Subscribe(topic string, msgReceiver chan []byte) {
+func (q *Quasar) Subscribe(topic []byte, msgReceiver chan []byte) {
 
 	digest := hash160(topic)
 	q.topicMutex.Lock()
@@ -175,7 +172,7 @@ func (q *Quasar) Subscribe(topic string, msgReceiver chan []byte) {
 
 // Unsubscribe message receiver channel from topic. If nil receiver channel is
 // provided all message receiver channels for given topic will be removed.
-func (q *Quasar) Unsubscribe(topic string, msgReceiver chan []byte) {
+func (q *Quasar) Unsubscribe(topic []byte, msgReceiver chan []byte) {
 
 	digest := hash160(topic)
 	q.topicMutex.Lock()
@@ -202,7 +199,7 @@ func (q *Quasar) Unsubscribe(topic string, msgReceiver chan []byte) {
 }
 
 // Subscribers retruns message receivers for given topic.
-func (q *Quasar) Subscribers(topic string) []chan []byte {
+func (q *Quasar) Subscribers(topic []byte) []chan []byte {
 	q.topicMutex.RLock()
 
 	// TODO implement
@@ -211,16 +208,15 @@ func (q *Quasar) Subscribers(topic string) []chan []byte {
 	return nil
 }
 
-// SubscribedTopics retruns a sorted slice of currently subscribed topics.
-func (q *Quasar) Subscriptions() []string {
+// SubscribedTopics retruns a slice of currently subscribed topics.
+func (q *Quasar) Subscriptions() [][]byte {
 	q.topicMutex.RLock()
-	topics := make([]string, len(q.topicDigests))
+	topics := make([][]byte, len(q.topicDigests))
 	i := 0
 	for _, topic := range q.topicDigests {
 		topics[i] = topic
 		i++
 	}
 	q.topicMutex.RUnlock()
-	sort.Strings(topics)
 	return topics
 }

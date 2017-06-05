@@ -49,7 +49,7 @@ func (mqt *MockOverlay) Stop() {}
 
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
-	event := newEvent("test topic", []byte("test message"), ttl)
+	event := newEvent([]byte("test topic"), []byte("test message"), ttl)
 	if event == nil {
 		t.Errorf("Expected event!")
 	}
@@ -81,58 +81,79 @@ func TestSubscriptions(t *testing.T) {
 	})
 
 	a := make(chan []byte)
-	q.Subscribe("a", a)
+	q.Subscribe([]byte("a"), a)
 	subs := q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	b1 := make(chan []byte)
-	q.Subscribe("b", b1)
+	q.Subscribe([]byte("b"), b1)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	b2 := make(chan []byte)
-	q.Subscribe("b", b2)
+	q.Subscribe([]byte("b"), b2)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	c1 := make(chan []byte)
-	q.Subscribe("c", c1)
+	q.Subscribe([]byte("c"), c1)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {
+	expectedSubs := [][]byte{[]byte("a"), []byte("b"), []byte("c")}
+	if !checkSubs(subs, expectedSubs) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	c2 := make(chan []byte)
-	q.Subscribe("c", c2)
+	q.Subscribe([]byte("c"), c2)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {
+	expectedSubs = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
+	if !checkSubs(subs, expectedSubs) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// test clears all if no receiver provided
-	q.Unsubscribe("c", nil)
+	q.Unsubscribe([]byte("c"), nil)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// only clears specific receiver
-	q.Unsubscribe("b", b1)
+	q.Unsubscribe([]byte("b"), b1)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// clears key when last receiver removed
-	q.Unsubscribe("b", b2)
+	q.Unsubscribe([]byte("b"), b2)
 	subs = q.Subscriptions()
-	if !reflect.DeepEqual(subs, []string{"a"}) {
+	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
+}
+
+func checkSubs(given [][]byte, expected [][]byte) bool {
+	if len(given) != len(expected) {
+		return false
+	}
+	for _, e := range expected {
+		found := false
+		for _, g := range given {
+			if reflect.DeepEqual(e, g) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }
