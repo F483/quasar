@@ -125,10 +125,16 @@ func TestSubscriptions(t *testing.T) {
 	}
 
 	// only clears specific receiver
+	if len(q.Subscribers([]byte("b"))) != 2 {
+		t.Errorf("Incorrect subscribers!")
+	}
 	q.Unsubscribe([]byte("b"), b1)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!", subs)
+	}
+	if len(q.Subscribers([]byte("b"))) != 1 {
+		t.Errorf("Incorrect subscribers!")
 	}
 
 	// clears key when last receiver removed

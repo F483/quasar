@@ -200,12 +200,14 @@ func (q *Quasar) Unsubscribe(topic []byte, msgReceiver chan []byte) {
 
 // Subscribers retruns message receivers for given topic.
 func (q *Quasar) Subscribers(topic []byte) []chan []byte {
+	digest := hash160(topic)
+	results := []chan []byte{}
 	q.topicMutex.RLock()
-
-	// TODO implement
-
+	if receivers, ok := q.topicSubscribers[digest]; ok {
+		results = append(results, receivers...)
+	}
 	q.topicMutex.RUnlock()
-	return nil
+	return results
 }
 
 // SubscribedTopics retruns a slice of currently subscribed topics.
