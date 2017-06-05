@@ -49,11 +49,11 @@ func (mqt *MockOverlay) Stop() {}
 
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
-	event := newEvent("test topic", "test message", ttl)
+	event := newEvent("test topic", []byte("test message"), ttl)
 	if event == nil {
 		t.Errorf("Expected event!")
 	}
-	if event.message != "test message" {
+	if string(event.message) != "test message" {
 		t.Errorf("event message not set!")
 	}
 	if event.ttl != ttl {
@@ -80,35 +80,35 @@ func TestSubscriptions(t *testing.T) {
 		FiltersK:               6,    // hashes
 	})
 
-	a := make(chan string)
+	a := make(chan []byte)
 	q.Subscribe("a", a)
 	subs := q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
-	b1 := make(chan string)
+	b1 := make(chan []byte)
 	q.Subscribe("b", b1)
 	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
-	b2 := make(chan string)
+	b2 := make(chan []byte)
 	q.Subscribe("b", b2)
 	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
-	c1 := make(chan string)
+	c1 := make(chan []byte)
 	q.Subscribe("c", c1)
 	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
-	c2 := make(chan string)
+	c2 := make(chan []byte)
 	q.Subscribe("c", c2)
 	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {

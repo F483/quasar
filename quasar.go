@@ -22,7 +22,7 @@ type overlayNetwork interface {
 
 type event struct {
 	topicDigest *hash160digest
-	message     string
+	message     []byte
 	publishers  []pubkey
 	ttl         uint32
 }
@@ -53,7 +53,7 @@ type Config struct {
 
 type Quasar struct {
 	network               overlayNetwork
-	subs                  map[string][]chan string // topic -> subscribers
+	subs                  map[string][]chan []byte // topic -> subscribers
 	subsMutex             *sync.RWMutex
 	peers                 []peer
 	peersMutex            *sync.Mutex
@@ -66,7 +66,7 @@ type Quasar struct {
 	stopFilterPropagation chan bool
 }
 
-func newEvent(topic string, message string, ttl uint32) *event {
+func newEvent(topic string, message []byte, ttl uint32) *event {
 	return &event{
 		topicDigest: hash160(topic),
 		message:     message,
@@ -80,7 +80,7 @@ func NewQuasar(network overlayNetwork, c Config) *Quasar {
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
 		network:               network,
-		subs:                  make(map[string][]chan string),
+		subs:                  make(map[string][]chan []byte),
 		subsMutex:             new(sync.RWMutex),
 		peers:                 make([]peer, 0),
 		peersMutex:            new(sync.Mutex),
@@ -127,12 +127,12 @@ func (q *Quasar) deliver(e *event) {
 	q.cachedSubDigestsMutex.RUnlock()
 }
 
-func (q *Quasar) Publish(topic string, message string) {
+func (q *Quasar) Publish(topic string, message []byte) {
 	q.processEvent(newEvent(topic, message, q.config.DefaultEventTTL))
 }
 
 func (q *Quasar) processEvent(e *event) {
-	eventData := string(e.topicDigest[:20]) + e.message
+	eventData := append(e.topicDigest[:20], e.message...)
 	if q.history.Witness([]byte(eventData)) {
 		return // dejavu, already seen
 	}
@@ -177,11 +177,11 @@ func (q *Quasar) Stop() {
 }
 
 // Subscribe provided message receiver channel to given topic.
-func (q *Quasar) Subscribe(topic string, msgReceiver chan string) {
+func (q *Quasar) Subscribe(topic string, msgReceiver chan []byte) {
 	q.subsMutex.Lock()
 	receivers, ok := q.subs[topic]
 	if ok != true {
-		q.subs[topic] = []chan string{msgReceiver}
+		q.subs[topic] = []chan []byte{msgReceiver}
 	} else {
 		q.subs[topic] = append(receivers, msgReceiver)
 	}
@@ -191,7 +191,7 @@ func (q *Quasar) Subscribe(topic string, msgReceiver chan string) {
 
 // Unsubscribe message receiver channel from topic. If nil receiver channel is
 // provided all message receiver channels for given topic will be removed.
-func (q *Quasar) Unsubscribe(topic string, msgReceiver chan string) {
+func (q *Quasar) Unsubscribe(topic string, msgReceiver chan []byte) {
 	q.subsMutex.Lock()
 	receivers, ok := q.subs[topic]
 
@@ -216,9 +216,9 @@ func (q *Quasar) Unsubscribe(topic string, msgReceiver chan string) {
 }
 
 // Subscriptions retruns copy of the current subscriptions map
-func (q *Quasar) Subscriptions() map[string][]chan string {
+func (q *Quasar) Subscriptions() map[string][]chan []byte {
 	q.subsMutex.RLock()
-	resultMap := make(map[string][]chan string)
+	resultMap := make(map[string][]chan []byte)
 	for k, v := range q.subs {
 		resultMap[k] = v
 	}
