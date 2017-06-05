@@ -6,41 +6,41 @@ import (
 )
 
 type MockNetwork struct {
-	peers          []PeerID
-	connections    map[PeerID][]PeerID
-	updateChannels map[PeerID]chan Update
-	eventChannels  map[PeerID]chan Event
+	peers          []pubkey
+	connections    map[pubkey][]pubkey
+	updateChannels map[pubkey]chan update
+	eventChannels  map[pubkey]chan event
 }
 
 type MockOverlay struct {
-	id      PeerID
+	peer    pubkey
 	network MockNetwork
 }
 
-func (mqt *MockOverlay) Id() PeerID {
-	return mqt.id
+func (mqt *MockOverlay) Id() pubkey {
+	return mqt.peer
 }
 
-func (mqt *MockOverlay) ConnectedPeers() []PeerID {
-	return mqt.network.connections[mqt.id]
+func (mqt *MockOverlay) ConnectedPeers() []pubkey {
+	return mqt.network.connections[mqt.peer]
 }
 
-func (mqt *MockOverlay) ReceivedEventChannel() chan Event {
-	return mqt.network.eventChannels[mqt.id]
+func (mqt *MockOverlay) ReceivedEventChannel() chan event {
+	return mqt.network.eventChannels[mqt.peer]
 
 }
 
-func (mqt *MockOverlay) ReceivedUpdateChannel() chan Update {
-	return mqt.network.updateChannels[mqt.id]
+func (mqt *MockOverlay) ReceivedUpdateChannel() chan update {
+	return mqt.network.updateChannels[mqt.peer]
 }
 
-func (mqt *MockOverlay) SendEvent(id PeerID, e Event) {
-	mqt.network.eventChannels[id] <- e
+func (mqt *MockOverlay) SendEvent(peer pubkey, e event) {
+	mqt.network.eventChannels[peer] <- e
 }
 
-func (mqt *MockOverlay) SendUpdate(id PeerID, f *Filters) {
-	update := Update{peerId: &mqt.id, filters: f}
-	mqt.network.updateChannels[id] <- update
+func (mqt *MockOverlay) SendUpdate(peer pubkey, index uint, filter []byte) {
+	u := update{peer: &mqt.peer, index: index, filter: filter}
+	mqt.network.updateChannels[peer] <- u
 }
 
 func (mqt *MockOverlay) Start() {}
@@ -49,21 +49,21 @@ func (mqt *MockOverlay) Stop() {}
 
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
-	event := NewEvent("test topic", "test message", ttl)
+	event := newEvent("test topic", "test message", ttl)
 	if event == nil {
 		t.Errorf("Expected event!")
 	}
 	if event.message != "test message" {
-		t.Errorf("Event message not set!")
+		t.Errorf("event message not set!")
 	}
 	if event.ttl != ttl {
-		t.Errorf("Event ttl not set!")
+		t.Errorf("event ttl not set!")
 	}
 	if event.publishers == nil && len(event.publishers) != 0 {
-		t.Errorf("Event publishers not set!")
+		t.Errorf("event publishers not set!")
 	}
 	if event.topicDigest == nil {
-		t.Errorf("Event digest not set!")
+		t.Errorf("event digest not set!")
 	}
 }
 
@@ -76,8 +76,8 @@ func TestSubscriptions(t *testing.T) {
 		HistoryLimit:           65536,
 		HistoryAccuracy:        0.000001,
 		FiltersDepth:           1024,
-		FiltersLimit:           65536,
-		FiltersAccuracy:        0.000001,
+		FiltersM:               8192, // m 1k
+		FiltersK:               6,    // hashes
 	})
 
 	a := make(chan string)

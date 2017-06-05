@@ -1,8 +1,8 @@
 package quasar
 
 import (
-	"github.com/willf/bloom"
-	"sync"
+//	"github.com/willf/bloom"
+//	"sync"
 )
 
 // Safe (udp will not fragment)
@@ -15,10 +15,10 @@ import (
 // m: 8192 // filter size = 1k
 // k: 6    // number of hash functions = (m / n) log(2)
 
-type Filters struct {
-	filters []*bloom.BloomFilter
-	mutex   *sync.RWMutex
-}
+// type Filters struct {
+// 	filters []*bloom.BloomFilter
+// 	mutex   *sync.RWMutex
+// }
 
 // func NewFilters(depth uint32) *Filters {
 // 	filters := make([]*bloom.BloomFilter, depth)

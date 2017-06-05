@@ -9,33 +9,34 @@ import (
 
 // FIXME messages and topics should be byte slices
 
-type OverlayNetwork interface {
-	Id() PeerID
-	ConnectedPeers() []PeerID
-	ReceivedEventChannel() chan *Event
-	ReceivedUpdateChannel() chan *Update
-	SendEvent(PeerID, Event)
-	SendUpdate(PeerID, *Filters)
+type overlayNetwork interface {
+	Id() pubkey
+	ConnectedPeers() []pubkey
+	ReceivedEventChannel() chan *event
+	ReceivedUpdateChannel() chan *update
+	SendEvent(pubkey, event)
+	SendUpdate(receiver pubkey, index uint, filter []byte)
 	Start()
 	Stop()
 }
 
-type Event struct {
-	topicDigest *Hash160Digest
+type event struct {
+	topicDigest *hash160digest
 	message     string
-	publishers  []PeerID
+	publishers  []pubkey
 	ttl         uint32
 }
 
-type Update struct {
-	peerId  *PeerID
-	filters *Filters
+type update struct {
+	peer   *pubkey
+	index  uint
+	filter []byte
 }
 
-type Peer struct {
-	id        *PeerID
-	filters   *Filters
-	timestamp int64 // unixtime
+type peer struct {
+	pubkey    *pubkey
+	filters   [][]byte
+	timestamp []int64 // unixtime
 }
 
 type Config struct {
@@ -46,48 +47,47 @@ type Config struct {
 	HistoryLimit           uint32
 	HistoryAccuracy        float64 // chance of error
 	FiltersDepth           uint32
-	FiltersLimit           uint32
-	FiltersAccuracy        float64
+	FiltersM               uint32 // filter size in bits
+	FiltersK               uint32 // number of hashes
 }
 
 type Quasar struct {
-	network               OverlayNetwork
+	network               overlayNetwork
 	subs                  map[string][]chan string // topic -> subscribers
 	subsMutex             *sync.RWMutex
-	peers                 []Peer
+	peers                 []peer
 	peersMutex            *sync.Mutex
 	history               dejavu.DejaVu // memory of past events
 	config                Config
-	filters               *Filters                 // own (subs + peers)
-	cachedSubDigests      map[Hash160Digest]string // digest -> topic
+	filters               [][]byte                 // own (subs + peers)
+	cachedSubDigests      map[hash160digest]string // digest -> topic
 	cachedSubDigestsMutex *sync.RWMutex
 	stopInputDispatcher   chan bool
 	stopFilterPropagation chan bool
 }
 
-// NewEvent greats a new Event for given data.
-func NewEvent(topic string, message string, ttl uint32) *Event {
-	return &Event{
-		topicDigest: Hash160(topic),
+func newEvent(topic string, message string, ttl uint32) *event {
+	return &event{
+		topicDigest: hash160(topic),
 		message:     message,
-		publishers:  []PeerID{},
+		publishers:  []pubkey{},
 		ttl:         ttl,
 	}
 }
 
-func NewQuasar(network OverlayNetwork, c Config) *Quasar {
+func NewQuasar(network overlayNetwork, c Config) *Quasar {
 
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
 		network:               network,
 		subs:                  make(map[string][]chan string),
 		subsMutex:             new(sync.RWMutex),
-		peers:                 make([]Peer, 0),
+		peers:                 make([]peer, 0),
 		peersMutex:            new(sync.Mutex),
 		history:               d,
 		config:                c,
 		filters:               nil,
-		cachedSubDigests:      make(map[Hash160Digest]string),
+		cachedSubDigests:      make(map[hash160digest]string),
 		cachedSubDigestsMutex: new(sync.RWMutex),
 		stopInputDispatcher:   nil, // set on Start() call
 		stopFilterPropagation: nil, // set on Start() call
@@ -98,25 +98,25 @@ func (q *Quasar) rebuildCaches() {
 
 	// rebuild sub digest mapping
 	q.cachedSubDigestsMutex.Lock()
-	q.cachedSubDigests = make(map[Hash160Digest]string) // clear
+	q.cachedSubDigests = make(map[hash160digest]string) // clear
 	for _, sub := range q.Subscriptions() {
-		q.cachedSubDigests[*Hash160(sub)] = sub
+		q.cachedSubDigests[*hash160(sub)] = sub
 	}
 	q.cachedSubDigestsMutex.Unlock()
 
 	// TODO rebuild q.filters
 }
 
-func (q *Quasar) processUpdate(update *Update) {
+func (q *Quasar) processUpdate(u *update) {
 	// TODO implement
 }
 
-func (q *Quasar) deliver(event *Event) {
+func (q *Quasar) deliver(e *event) {
 	q.cachedSubDigestsMutex.RLock()
-	if topic, ok := q.cachedSubDigests[*event.topicDigest]; ok {
+	if topic, ok := q.cachedSubDigests[*e.topicDigest]; ok {
 		q.subsMutex.RLock()
 		for _, receiver := range q.subs[topic] {
-			receiver <- event.message
+			receiver <- e.message
 		}
 		q.subsMutex.RUnlock()
 	}
@@ -124,16 +124,16 @@ func (q *Quasar) deliver(event *Event) {
 }
 
 func (q *Quasar) Publish(topic string, message string) {
-	q.processEvent(NewEvent(topic, message, q.config.DefaultEventTTL))
+	q.processEvent(newEvent(topic, message, q.config.DefaultEventTTL))
 }
 
-func (q *Quasar) processEvent(event *Event) {
-	eventData := string(event.topicDigest[:20]) + event.message
+func (q *Quasar) processEvent(e *event) {
+	eventData := string(e.topicDigest[:20]) + e.message
 	if q.history.Witness([]byte(eventData)) {
 		return // dejavu, already seen
 	}
 
-	q.deliver(event)
+	q.deliver(e)
 
 	// TODO propagate
 }
@@ -143,8 +143,8 @@ func (q *Quasar) dispatchInput() {
 		select {
 		case update := <-q.network.ReceivedUpdateChannel():
 			go q.processUpdate(update)
-		case event := <-q.network.ReceivedEventChannel():
-			go q.processEvent(event)
+		case e := <-q.network.ReceivedEventChannel():
+			go q.processEvent(e)
 		case <-q.stopInputDispatcher:
 			return // TODO confirm stopped
 		}
@@ -214,6 +214,7 @@ func (q *Quasar) Unsubscribe(topic string, msgReceiver chan string) {
 // Subscriptions retruns a sorted slice of topics currently subscribed to.
 func (q *Quasar) Subscriptions() []string {
 	q.subsMutex.RLock()
+	// FIXME just return copy of q.subs instead
 	topics := make([]string, len(q.subs))
 	i := 0
 	for topic := range q.subs {
