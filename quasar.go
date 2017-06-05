@@ -44,11 +44,11 @@ type Config struct {
 	InputDispatcherDelay   time.Duration // in ms
 	PeerFiltersExpire      uint32        // in seconds
 	PublishFiltersInterval uint32        // in seconds
-	HistoryLimit           uint32
-	HistoryAccuracy        float64 // chance of error
-	FiltersDepth           uint32
-	FiltersM               uint32 // filter size in bits
-	FiltersK               uint32 // number of hashes
+	HistoryLimit           uint32        // entries remembered
+	HistoryAccuracy        float64       // chance of error
+	FiltersDepth           uint32        // filter stack height
+	FiltersM               uint32        // filter size in bits
+	FiltersK               uint32        // number of hashes
 }
 
 type Quasar struct {
@@ -97,12 +97,16 @@ func NewQuasar(network overlayNetwork, c Config) *Quasar {
 func (q *Quasar) rebuildCaches() {
 
 	// rebuild sub digest mapping
+	q.subsMutex.RLock()
 	q.cachedSubDigestsMutex.Lock()
+
 	q.cachedSubDigests = make(map[hash160digest]string) // clear
-	for _, sub := range q.Subscriptions() {
-		q.cachedSubDigests[*hash160(sub)] = sub
+	for topic := range q.subs {
+		q.cachedSubDigests[*hash160(topic)] = topic
 	}
+
 	q.cachedSubDigestsMutex.Unlock()
+	q.subsMutex.RUnlock()
 
 	// TODO rebuild q.filters
 }
@@ -211,17 +215,26 @@ func (q *Quasar) Unsubscribe(topic string, msgReceiver chan string) {
 	go q.rebuildCaches()
 }
 
-// Subscriptions retruns a sorted slice of topics currently subscribed to.
-func (q *Quasar) Subscriptions() []string {
+// Subscriptions retruns copy of the current subscriptions map
+func (q *Quasar) Subscriptions() map[string][]chan string {
 	q.subsMutex.RLock()
-	// FIXME just return copy of q.subs instead
-	topics := make([]string, len(q.subs))
+	resultMap := make(map[string][]chan string)
+	for k, v := range q.subs {
+		resultMap[k] = v
+	}
+	q.subsMutex.RUnlock()
+	return resultMap
+}
+
+// SubscribedTopics retruns a sorted slice of currently subscribed topics.
+func (q *Quasar) SubscribedTopics() []string {
+	subs := q.Subscriptions()
+	topics := make([]string, len(subs))
 	i := 0
-	for topic := range q.subs {
+	for topic := range subs {
 		topics[i] = topic
 		i++
 	}
 	sort.Strings(topics)
-	q.subsMutex.RUnlock()
 	return topics
 }

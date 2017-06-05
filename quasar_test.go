@@ -82,56 +82,56 @@ func TestSubscriptions(t *testing.T) {
 
 	a := make(chan string)
 	q.Subscribe("a", a)
-	subs := q.Subscriptions()
+	subs := q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	b1 := make(chan string)
 	q.Subscribe("b", b1)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	b2 := make(chan string)
 	q.Subscribe("b", b2)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions! ", subs)
 	}
 
 	c1 := make(chan string)
 	q.Subscribe("c", c1)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	c2 := make(chan string)
 	q.Subscribe("c", c2)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b", "c"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// test clears all if no receiver provided
 	q.Unsubscribe("c", nil)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// only clears specific receiver
 	q.Unsubscribe("b", b1)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a", "b"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
 
 	// clears key when last receiver removed
 	q.Unsubscribe("b", b2)
-	subs = q.Subscriptions()
+	subs = q.SubscribedTopics()
 	if !reflect.DeepEqual(subs, []string{"a"}) {
 		t.Errorf("Incorrect subscriptions!", subs)
 	}
