@@ -32,16 +32,26 @@ type update struct {
 }
 
 type peer struct {
-	pubkey    *pubkey
-	filters   [][]byte
-	timestamp []int64 // unixtime
+	pubkey     *pubkey
+	filters    [][]byte
+	timestamps []uint64 // unixtime
+}
+
+func (p *peer) isExpired(cfg *Config) bool {
+	now := uint64(time.Now().Unix())
+	for _, timestamp := range p.timestamps {
+		if timestamp >= (now - cfg.FilterFreshness) {
+			return false
+		}
+	}
+	return true
 }
 
 type Config struct {
 	DefaultEventTTL     uint32        // decremented every hop
 	DispatcherDelay     time.Duration // in ms
-	PeerFiltersExpire   uint32        // in seconds
-	PropagationInterval uint32        // in seconds
+	FilterFreshness     uint64        // in seconds
+	PropagationInterval uint64        // in seconds
 	HistoryLimit        uint32        // entries remembered
 	HistoryAccuracy     float64       // chance of error
 	FiltersDepth        uint32        // filter stack height
@@ -55,7 +65,6 @@ type Quasar struct {
 	topics          map[hash160digest][]byte
 	mutex           *sync.RWMutex
 	peers           []peer
-	peersMutex      *sync.Mutex
 	history         dejavu.DejaVu // memory of past events
 	config          Config
 	filters         [][]byte // own (subs + peers)
@@ -81,7 +90,6 @@ func NewQuasar(network overlayNetwork, c Config) *Quasar {
 		topics:          make(map[hash160digest][]byte),
 		mutex:           new(sync.RWMutex),
 		peers:           make([]peer, 0),
-		peersMutex:      new(sync.Mutex),
 		history:         d,
 		config:          c,
 		filters:         nil,
@@ -108,6 +116,33 @@ func (q *Quasar) deliver(receivers []chan []byte, e *event) {
 	}
 }
 
+// Algorithm 1 from the quasar paper.
+func (q *Quasar) sendUpdates() {
+	cfg := &q.config
+	q.mutex.RLock()
+	filters := newFilterStack(&q.config)
+	for digest := range q.subscribers {
+		fsInsertDigest(filters, 0, cfg, digest)
+	}
+	pubkey := q.network.Id()
+	fsInsert(filters, 0, cfg, pubkey[:])
+	for _, p := range q.peers {
+		if p.isExpired(cfg) {
+			continue
+		}
+		for i := 1; uint32(i) < cfg.FiltersDepth; i++ {
+			filters[i] = mergeFilters(filters[i], p.filters[i-1], cfg)
+		}
+	}
+	q.filters = filters
+	for _, p := range q.peers {
+		for i := 0; uint32(i) < cfg.FiltersDepth; i++ {
+			q.network.SendUpdate(p.pubkey, uint(i), filters[i])
+		}
+	}
+	q.mutex.RUnlock()
+}
+
 // Algorithm 2 from the quasar paper.
 func (q *Quasar) route(e *event) {
 	q.mutex.RLock()
@@ -132,7 +167,7 @@ func (q *Quasar) route(e *event) {
 	}
 	for i := 0; uint32(i) < q.config.FiltersDepth; i++ {
 		for _, p := range q.peers {
-			f := newFilter(p.filters[i], &q.config)
+			f := unmarshalFilter(p.filters[i], &q.config)
 			if f.containsDigest(*e.topicDigest) {
 				negRt := false
 				for _, publisher := range e.publishers {

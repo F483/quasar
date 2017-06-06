@@ -71,7 +71,7 @@ func TestSubscriptions(t *testing.T) {
 	q := NewQuasar(nil, Config{
 		DefaultEventTTL:     1024,
 		DispatcherDelay:     1,
-		PeerFiltersExpire:   180,
+		FilterFreshness:     180,
 		PropagationInterval: 60,
 		HistoryLimit:        65536,
 		HistoryAccuracy:     0.000001,
