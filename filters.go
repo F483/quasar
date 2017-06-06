@@ -1,9 +1,9 @@
 package quasar
 
-import (
+// import (
 //	"github.com/willf/bloom"
 //	"sync"
-)
+// )
 
 // Safe (udp will not fragment)
 // n: 1024 // number of elements
@@ -37,3 +37,21 @@ import (
 // func (f Filters) rebuild(topics []Hash160Digest, peerFilters []*Filters) {
 //
 // }
+
+type filter struct {
+	m uint32
+	k uint32
+	b []byte
+}
+
+func newFilter(b []byte, cfg *Config) *filter {
+	return &filter{b: b, m: cfg.FiltersM, k: cfg.FiltersK}
+}
+
+func (f *filter) contains(data []byte) bool {
+	return f.containsDigest(hash160(data))
+}
+
+func (f *filter) containsDigest(topicDigest hash160digest) bool {
+	return false // FIXME implement
+}

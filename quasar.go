@@ -2,6 +2,7 @@ package quasar
 
 import (
 	"github.com/f483/dejavu"
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -11,8 +12,8 @@ type overlayNetwork interface {
 	ConnectedPeers() []pubkey
 	ReceivedEventChannel() chan *event
 	ReceivedUpdateChannel() chan *update
-	SendEvent(pubkey, event)
-	SendUpdate(receiver pubkey, index uint, filter []byte)
+	SendEvent(*pubkey, *event)
+	SendUpdate(receiver *pubkey, index uint, filter []byte)
 	Start()
 	Stop()
 }
@@ -93,29 +94,65 @@ func (q *Quasar) processUpdate(u *update) {
 	// TODO implement
 }
 
-func (q *Quasar) deliver(e *event) {
+func (q *Quasar) Publish(topic []byte, message []byte) {
+	q.route(newEvent(topic, message, q.config.DefaultEventTTL))
+}
+
+func (q *Quasar) isDuplicate(e *event) bool {
+	return q.history.Witness(append(e.topicDigest[:20], e.message...))
+}
+
+func (q *Quasar) deliver(receivers []chan []byte, e *event) {
+	for _, receiver := range receivers {
+		receiver <- e.message
+	}
+}
+
+// Algorithm 2 from the quasar paper.
+func (q *Quasar) route(e *event) {
 	q.mutex.RLock()
+
+	if q.isDuplicate(e) {
+		q.mutex.RUnlock()
+		return
+	}
 	if receivers, ok := q.subscribers[*e.topicDigest]; ok {
-		for _, receiver := range receivers {
-			receiver <- e.message
+		q.deliver(receivers, e)
+		e.publishers = append(e.publishers, q.network.Id())
+		for _, p := range q.peers {
+			q.network.SendEvent(p.pubkey, e)
+		}
+		q.mutex.RUnlock()
+		return
+	}
+	e.ttl -= 1
+	if e.ttl == 0 {
+		q.mutex.RUnlock()
+		return
+	}
+	for i := 0; uint32(i) < q.config.FiltersDepth; i++ {
+		for _, p := range q.peers {
+			f := newFilter(p.filters[i], &q.config)
+			if f.containsDigest(*e.topicDigest) {
+				negRt := false
+				for _, publisher := range e.publishers {
+					if f.contains(publisher[:]) {
+						negRt = true
+					}
+				}
+				if !negRt {
+					q.network.SendEvent(p.pubkey, e)
+					q.mutex.RUnlock()
+					return
+				}
+			}
 		}
 	}
-	q.mutex.RUnlock()
-}
-
-func (q *Quasar) Publish(topic []byte, message []byte) {
-	q.processEvent(newEvent(topic, message, q.config.DefaultEventTTL))
-}
-
-func (q *Quasar) processEvent(e *event) {
-	eventData := append(e.topicDigest[:20], e.message...)
-	if q.history.Witness([]byte(eventData)) {
-		return // dejavu, already seen
+	if len(q.peers) > 0 {
+		p := q.peers[rand.Intn(len(q.peers))]
+		q.network.SendEvent(p.pubkey, e)
 	}
-
-	q.deliver(e)
-
-	// TODO propagate
+	q.mutex.RUnlock()
 }
 
 func (q *Quasar) dispatchInput() {
@@ -124,7 +161,7 @@ func (q *Quasar) dispatchInput() {
 		case update := <-q.network.ReceivedUpdateChannel():
 			go q.processUpdate(update)
 		case e := <-q.network.ReceivedEventChannel():
-			go q.processEvent(e)
+			go q.route(e)
 		case <-q.stopDispatcher:
 			return // TODO confirm stopped
 		}
