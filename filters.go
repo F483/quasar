@@ -70,12 +70,36 @@ func filterInsert(f []byte, data []byte, c *Config) []byte {
 }
 
 func filterInsertDigest(f []byte, d hash160digest, c *Config) []byte {
-	// TODO implement
-	return nil
+	bf, err := filterDecode(f, c)
+	if err != nil {
+		// TODO panic, shouldn't happen after validation
+	}
+	bf.Add(d[:])
+	updated, err := filterEncode(bf)
+	if err != nil {
+		// TODO panic, shouldn't happen after input validation
+	}
+	return updated
 }
 
 func filterMerge(a []byte, b []byte, c *Config) []byte {
-	return nil // TODO implement
+	abf, err := filterDecode(a, c)
+	if err != nil {
+		// TODO panic, shouldn't happen after input validation
+	}
+	bbf, err := filterDecode(a, c)
+	if err != nil {
+		// TODO panic, shouldn't happen after input validation
+	}
+	err = abf.Merge(bbf)
+	if err != nil {
+		// TODO panic, shouldn't happen after input validation
+	}
+	merged, err := filterEncode(abf)
+	if err != nil {
+		// TODO panic, shouldn't happen after input validation
+	}
+	return merged
 }
 
 func filterContains(f []byte, data []byte, c *Config) bool {
@@ -83,5 +107,9 @@ func filterContains(f []byte, data []byte, c *Config) bool {
 }
 
 func filterContainsDigest(f []byte, d hash160digest, c *Config) bool {
-	return false // TODO implement
+	bf, err := filterDecode(f, c)
+	if err != nil {
+		// TODO panic, shouldn't happen after validation
+	}
+	return bf.Test(d[:])
 }
