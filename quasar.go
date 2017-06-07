@@ -26,17 +26,19 @@ type event struct {
 }
 
 func (e *event) isValid() bool {
-	return false // TODO implement
+	return e != nil && e.message != nil &&
+		e.publishers != nil && e.topicDigest != nil
 }
 
 type update struct {
 	peer   *pubkey
-	index  uint
+	index  uint32
 	filter []byte
 }
 
-func (u *update) isValid() bool {
-	return false // TODO implement
+func (u *update) isValid(c *Config) bool {
+	return u == nil || u.peer == nil || u.index < c.FiltersDepth ||
+		uint64(len(u.filter)) != (c.FiltersM/8)
 }
 
 type peer struct {
@@ -45,10 +47,10 @@ type peer struct {
 	timestamps []uint64 // unixtime
 }
 
-func (p *peer) isExpired(cfg *Config) bool {
+func (p *peer) isExpired(c *Config) bool {
 	now := uint64(time.Now().Unix())
 	for _, timestamp := range p.timestamps {
-		if timestamp >= (now - cfg.FilterFreshness) {
+		if timestamp >= (now - c.FilterFreshness) {
 			return false
 		}
 	}
@@ -57,14 +59,14 @@ func (p *peer) isExpired(cfg *Config) bool {
 
 type Config struct {
 	DefaultEventTTL     uint32        // decremented every hop
-	DispatcherDelay     time.Duration // in ms
+	DispatcherDelay     time.Duration // in ms FIXME uint64
 	FilterFreshness     uint64        // in seconds
 	PropagationInterval uint64        // in seconds
 	HistoryLimit        uint32        // entries remembered
 	HistoryAccuracy     float64       // chance of error
 	FiltersDepth        uint32        // filter stack height
-	FiltersM            uint32        // filter size in bits
-	FiltersK            uint32        // number of hashes
+	FiltersM            uint64        // filter size in bits
+	FiltersK            uint64        // number of hashes
 }
 
 type Quasar struct {
@@ -203,7 +205,10 @@ func (q *Quasar) dispatchInput() {
 	for {
 		select {
 		case update := <-q.net.ReceivedUpdateChannel():
-			if update.isValid() {
+			q.mutex.RLock()
+			validUpdate := update.isValid(q.cfg)
+			q.mutex.RUnlock()
+			if validUpdate {
 				go q.processUpdate(update)
 			}
 		case event := <-q.net.ReceivedEventChannel():

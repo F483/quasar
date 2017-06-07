@@ -1,13 +1,60 @@
 package quasar
 
 import (
-//	"github.com/willf/bloom"
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"github.com/willf/bloom"
 )
 
 // Safeish (UDP unlikely to fragment as under MTU 1460) ?
 // n: 1024 // number of elements
 // m: 8192 // filter size = 1k
 // k: 6    // number of hash functions = (m / n) log(2)
+
+func filterEncode(f *bloom.BloomFilter) ([]byte, error) {
+	data, err := f.GobEncode()
+	if err != nil {
+		return nil, err
+	}
+	return data[24:], nil // remove known header
+}
+
+func filterDecode(d []byte, c *Config) (*bloom.BloomFilter, error) {
+	m := c.FiltersM
+	k := c.FiltersK
+	if m%64 != 0 {
+		return nil, fmt.Errorf("M not multiple of 64: %d!", m)
+	}
+	if uint64(len(d)) != (m / 8) {
+		return nil, fmt.Errorf("Data len '%d' != '%d'!", len(d), m/8)
+	}
+
+	// recreate header
+	var buf bytes.Buffer
+	err := binary.Write(&buf, binary.BigEndian, m)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(&buf, binary.BigEndian, k)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Write(&buf, binary.BigEndian, m)
+	if err != nil {
+		return nil, err
+	}
+	header := buf.Bytes()
+
+	// recreate and decode gob
+	gob := append(header, d...)
+	f := bloom.New(uint(m), uint(k))
+	err = f.GobDecode(gob)
+	if err != nil {
+		return nil, err
+	}
+	return f, nil
+}
 
 func newFilters(c *Config) [][]byte {
 	m := c.FiltersM

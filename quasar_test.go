@@ -38,7 +38,7 @@ func (mqt *MockOverlay) SendEvent(peer *pubkey, e event) {
 	mqt.network.eventChannels[*peer] <- e
 }
 
-func (mqt *MockOverlay) SendUpdate(peer *pubkey, index uint, filter []byte) {
+func (mqt *MockOverlay) SendUpdate(peer *pubkey, index uint32, filter []byte) {
 	u := update{peer: &mqt.peer, index: index, filter: filter}
 	mqt.network.updateChannels[*peer] <- u
 }
