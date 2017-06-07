@@ -68,7 +68,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := NewQuasar(nil, Config{
+	q := NewQuasar(nil, &Config{
 		DefaultEventTTL:     1024,
 		DispatcherDelay:     1,
 		FilterFreshness:     180,

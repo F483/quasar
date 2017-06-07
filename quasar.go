@@ -25,10 +25,18 @@ type event struct {
 	ttl         uint32
 }
 
+func (e *event) isValid() bool {
+	return false // TODO implement
+}
+
 type update struct {
 	peer   *pubkey
 	index  uint
 	filter []byte
+}
+
+func (u *update) isValid() bool {
+	return false // TODO implement
 }
 
 type peer struct {
@@ -60,13 +68,13 @@ type Config struct {
 }
 
 type Quasar struct {
-	network         overlayNetwork
+	net             overlayNetwork
 	subscribers     map[hash160digest][]chan []byte
 	topics          map[hash160digest][]byte
 	mutex           *sync.RWMutex
 	peers           []peer
 	history         dejavu.DejaVu // memory of past events
-	config          Config
+	cfg             *Config
 	filters         [][]byte // own (subs + peers)
 	stopDispatcher  chan bool
 	stopPropagation chan bool
@@ -82,16 +90,17 @@ func newEvent(topic []byte, message []byte, ttl uint32) *event {
 	}
 }
 
-func NewQuasar(network overlayNetwork, c Config) *Quasar {
+func NewQuasar(net overlayNetwork, c *Config) *Quasar {
+	// TODO validate input
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
-		network:         network,
+		net:             net,
 		subscribers:     make(map[hash160digest][]chan []byte),
 		topics:          make(map[hash160digest][]byte),
 		mutex:           new(sync.RWMutex),
 		peers:           make([]peer, 0),
 		history:         d,
-		config:          c,
+		cfg:             c,
 		filters:         nil,
 		stopDispatcher:  nil, // set on Start() call
 		stopPropagation: nil, // set on Start() call
@@ -103,7 +112,8 @@ func (q *Quasar) processUpdate(u *update) {
 }
 
 func (q *Quasar) Publish(topic []byte, message []byte) {
-	q.route(newEvent(topic, message, q.config.DefaultEventTTL))
+	// TODO validate input
+	go q.route(newEvent(topic, message, q.cfg.DefaultEventTTL))
 }
 
 func (q *Quasar) isDuplicate(e *event) bool {
@@ -118,29 +128,28 @@ func (q *Quasar) deliver(receivers []chan []byte, e *event) {
 
 // Algorithm 1 from the quasar paper.
 func (q *Quasar) sendUpdates() {
-	cfg := &q.config
-	q.mutex.RLock()
-	filters := newFilterStack(&q.config)
+	q.mutex.Lock()
+	filters := newFilters(q.cfg)
 	for digest := range q.subscribers {
-		fsInsertDigest(filters, 0, cfg, digest)
+		filters[0] = filterInsertDigest(filters[0], digest, q.cfg)
 	}
-	pubkey := q.network.Id()
-	fsInsert(filters, 0, cfg, pubkey[:])
+	pubkey := q.net.Id()
+	filters[0] = filterInsert(filters[0], pubkey[:], q.cfg)
 	for _, p := range q.peers {
-		if p.isExpired(cfg) {
+		if p.isExpired(q.cfg) {
 			continue
 		}
-		for i := 1; uint32(i) < cfg.FiltersDepth; i++ {
-			filters[i] = mergeFilters(filters[i], p.filters[i-1], cfg)
+		for i := 1; uint32(i) < q.cfg.FiltersDepth; i++ {
+			filters[i] = filterMerge(filters[i], p.filters[i-1], q.cfg)
 		}
 	}
 	q.filters = filters
 	for _, p := range q.peers {
-		for i := 0; uint32(i) < cfg.FiltersDepth; i++ {
-			q.network.SendUpdate(p.pubkey, uint(i), filters[i])
+		for i := 0; uint32(i) < q.cfg.FiltersDepth; i++ {
+			go q.net.SendUpdate(p.pubkey, uint(i), filters[i])
 		}
 	}
-	q.mutex.RUnlock()
+	q.mutex.Unlock()
 }
 
 // Algorithm 2 from the quasar paper.
@@ -153,9 +162,9 @@ func (q *Quasar) route(e *event) {
 	}
 	if receivers, ok := q.subscribers[*e.topicDigest]; ok {
 		q.deliver(receivers, e)
-		e.publishers = append(e.publishers, q.network.Id())
+		e.publishers = append(e.publishers, q.net.Id())
 		for _, p := range q.peers {
-			q.network.SendEvent(p.pubkey, e)
+			q.net.SendEvent(p.pubkey, e)
 		}
 		q.mutex.RUnlock()
 		return
@@ -165,18 +174,18 @@ func (q *Quasar) route(e *event) {
 		q.mutex.RUnlock()
 		return
 	}
-	for i := 0; uint32(i) < q.config.FiltersDepth; i++ {
+	for i := 0; uint32(i) < q.cfg.FiltersDepth; i++ {
 		for _, p := range q.peers {
-			f := unmarshalFilter(p.filters[i], &q.config)
-			if f.containsDigest(*e.topicDigest) {
+			f := p.filters[i]
+			if filterContainsDigest(f, *e.topicDigest, q.cfg) {
 				negRt := false
 				for _, publisher := range e.publishers {
-					if f.contains(publisher[:]) {
+					if filterContains(f, publisher[:], q.cfg) {
 						negRt = true
 					}
 				}
 				if !negRt {
-					q.network.SendEvent(p.pubkey, e)
+					q.net.SendEvent(p.pubkey, e)
 					q.mutex.RUnlock()
 					return
 				}
@@ -185,7 +194,7 @@ func (q *Quasar) route(e *event) {
 	}
 	if len(q.peers) > 0 {
 		p := q.peers[rand.Intn(len(q.peers))]
-		q.network.SendEvent(p.pubkey, e)
+		q.net.SendEvent(p.pubkey, e)
 	}
 	q.mutex.RUnlock()
 }
@@ -193,14 +202,18 @@ func (q *Quasar) route(e *event) {
 func (q *Quasar) dispatchInput() {
 	for {
 		select {
-		case update := <-q.network.ReceivedUpdateChannel():
-			go q.processUpdate(update)
-		case e := <-q.network.ReceivedEventChannel():
-			go q.route(e)
+		case update := <-q.net.ReceivedUpdateChannel():
+			if update.isValid() {
+				go q.processUpdate(update)
+			}
+		case event := <-q.net.ReceivedEventChannel():
+			if event.isValid() {
+				go q.route(event)
+			}
 		case <-q.stopDispatcher:
 			return // TODO confirm stopped
 		}
-		time.Sleep(q.config.DispatcherDelay * time.Millisecond)
+		time.Sleep(q.cfg.DispatcherDelay * time.Millisecond)
 	}
 }
 
@@ -210,7 +223,8 @@ func (q *Quasar) propagateFilters() {
 
 // Start quasar system
 func (q *Quasar) Start() {
-	q.network.Start()
+	// TODO validate input
+	q.net.Start()
 	q.stopDispatcher = make(chan bool)
 	q.stopPropagation = make(chan bool)
 	go q.dispatchInput()
@@ -219,13 +233,15 @@ func (q *Quasar) Start() {
 
 // Stop quasar system
 func (q *Quasar) Stop() {
-	q.network.Stop()
+	// TODO validate input
+	q.net.Stop()
 	q.stopDispatcher <- true
 	q.stopPropagation <- true
 }
 
 // Subscribe provided message receiver channel to given topic.
 func (q *Quasar) Subscribe(topic []byte, receiver chan []byte) {
+	// TODO validate input
 	digest := hash160(topic)
 	q.mutex.Lock()
 	receivers, ok := q.subscribers[digest]
@@ -242,6 +258,7 @@ func (q *Quasar) Subscribe(topic []byte, receiver chan []byte) {
 // channel is provided all message receiver channels for given topic
 // will be removed.
 func (q *Quasar) Unsubscribe(topic []byte, receiver chan []byte) {
+	// TODO validate input
 
 	digest := hash160(topic)
 	q.mutex.Lock()
@@ -269,6 +286,7 @@ func (q *Quasar) Unsubscribe(topic []byte, receiver chan []byte) {
 
 // Subscribers retruns message receivers for given topic.
 func (q *Quasar) Subscribers(topic []byte) []chan []byte {
+	// TODO validate input
 	digest := hash160(topic)
 	results := []chan []byte{}
 	q.mutex.RLock()
