@@ -8,6 +8,12 @@ type event struct {
 }
 
 func newEvent(topic []byte, message []byte, ttl uint32) *event {
+	if topic == nil {
+		topic = []byte{}
+	}
+	if message == nil {
+		message = []byte{}
+	}
 	digest := hash160(topic)
 	return &event{
 		topicDigest: &digest,

@@ -7,10 +7,8 @@ type update struct {
 }
 
 func validUpdate(u *update, c *Config) bool {
-	if u == nil || u.peer == nil || u.index < c.FiltersDepth {
-		return false
-	}
-	return uint64(len(u.filter)) == (c.FiltersM / 8)
+	return u != nil && u.peer != nil && u.index < c.FiltersDepth &&
+		uint64(len(u.filter)) == (c.FiltersM/8)
 }
 
 func serializeUpdate(u *update) []byte {

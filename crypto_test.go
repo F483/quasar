@@ -9,12 +9,14 @@ func TestHash160(t *testing.T) {
 
 	// decode topic
 	topicHex := []byte("f483")
-	topicBytes := make([]byte, hex.DecodedLen(len(topicHex)))
-	topicBytesLen, err := hex.Decode(topicBytes, topicHex)
+	topic := make([]byte, hex.DecodedLen(len(topicHex)))
+	topicBytesLen, err := hex.Decode(topic, topicHex)
+	if topicBytesLen != 2 {
+		t.Errorf("Impossible bytes len: %i", topicBytesLen)
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
-	topic := topicBytes[:topicBytesLen]
 
 	// decode expected digest
 	expectedHex := []byte("4e0123796bee558240c5945ac9aff553fcc6256d")

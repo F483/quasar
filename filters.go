@@ -62,10 +62,12 @@ func newFilters(c *Config) [][]byte {
 }
 
 func filterInsert(f []byte, data []byte, c *Config) []byte {
+	// TODO use variable arguments
 	return filterInsertDigest(f, hash160(data), c)
 }
 
 func filterInsertDigest(f []byte, d hash160digest, c *Config) []byte {
+	// TODO use variable arguments
 	bf := deserializeFilter(f, c)
 	bf.Add(d[:])
 	return serializeFilter(bf)

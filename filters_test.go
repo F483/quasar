@@ -1,8 +1,6 @@
 package quasar
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestFilters(t *testing.T) {
 	cfg := Config{
