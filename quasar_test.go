@@ -34,18 +34,22 @@ func (mqt *MockOverlay) ReceivedUpdateChannel() chan update {
 	return mqt.network.updateChannels[mqt.peer]
 }
 
-func (mqt *MockOverlay) SendEvent(peer *pubkey, e event) {
-	mqt.network.eventChannels[*peer] <- e
+func (mqt *MockOverlay) SendEvent(p *pubkey, e event) {
+	mqt.network.eventChannels[*p] <- e
 }
 
-func (mqt *MockOverlay) SendUpdate(peer *pubkey, index uint32, filter []byte) {
-	u := update{peer: &mqt.peer, index: index, filter: filter}
-	mqt.network.updateChannels[*peer] <- u
+func (mqt *MockOverlay) SendUpdate(p *pubkey, i uint32, filter []byte) {
+	u := update{peer: &mqt.peer, index: i, filter: filter}
+	mqt.network.updateChannels[*p] <- u
 }
 
-func (mqt *MockOverlay) Start() {}
+func (mqt *MockOverlay) Start() {
 
-func (mqt *MockOverlay) Stop() {}
+}
+
+func (mqt *MockOverlay) Stop() {
+
+}
 
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
@@ -68,7 +72,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := NewQuasar(nil, &Config{
+	q := NewQuasar(nil, Config{
 		DefaultEventTTL:     1024,
 		DispatcherDelay:     1,
 		FilterFreshness:     180,
