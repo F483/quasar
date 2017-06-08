@@ -5,16 +5,16 @@ import "testing"
 func TestUpdate(t *testing.T) {
 
 	var pk pubkey
-	cfg := &Config{
-		DefaultEventTTL:     1024,
-		DispatcherDelay:     1,
-		FilterFreshness:     180,
-		PropagationInterval: 60,
-		HistoryLimit:        65536,
-		HistoryAccuracy:     0.000001,
-		FiltersDepth:        1024,
-		FiltersM:            8192,
-		FiltersK:            6,
+	cfg := &config{
+		defaultEventTTL:     1024,
+		dispatcherDelay:     1,
+		filterFreshness:     180,
+		propagationInterval: 60,
+		historyLimit:        65536,
+		historyAccuracy:     0.000001,
+		filtersDepth:        1024,
+		filtersM:            8192,
+		filtersK:            6,
 	}
 
 	// valid update

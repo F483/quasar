@@ -6,9 +6,10 @@ type update struct {
 	filter []byte
 }
 
-func validUpdate(u *update, c *Config) bool {
-	return u != nil && u.peer != nil && u.index < c.FiltersDepth &&
-		uint64(len(u.filter)) == (c.FiltersM/8)
+func validUpdate(u *update, c *config) bool {
+	return u != nil && u.peer != nil &&
+		u.index < (c.filtersDepth-1) && // top filter never propagated
+		uint64(len(u.filter)) == (c.filtersM/8)
 }
 
 func serializeUpdate(u *update) []byte {

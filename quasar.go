@@ -9,15 +9,16 @@ import (
 
 // FIXME use io.Reader and io.Writer where possible
 
-type overlayNetwork interface {
-	Id() pubkey
-	ConnectedPeers() []pubkey
-	ReceivedEventChannel() chan *event
-	ReceivedUpdateChannel() chan *update
-	SendEvent(*pubkey, *event)
-	SendUpdate(receiver *pubkey, index uint, filter []byte)
-	Start()
-	Stop()
+type config struct {
+	defaultEventTTL     uint32        // decremented every hop
+	dispatcherDelay     time.Duration // in ms FIXME uint64
+	filterFreshness     uint64        // in seconds
+	propagationInterval uint64        // in seconds
+	historyLimit        uint32        // entries remembered
+	historyAccuracy     float64       // chance of error
+	filtersDepth        uint32        // filter stack height
+	filtersM            uint64        // size in bits (multiple of 64)
+	filtersK            uint64        // number of hashes
 }
 
 type peer struct {
@@ -26,10 +27,10 @@ type peer struct {
 	timestamps []uint64 // unixtime
 }
 
-func (p *peer) isExpired(c *Config) bool {
+func (p *peer) isExpired(c *config) bool {
 	now := uint64(time.Now().Unix())
 	for _, timestamp := range p.timestamps {
-		if timestamp >= (now - c.FilterFreshness) {
+		if timestamp >= (now - c.filterFreshness) {
 			return false
 		}
 	}
@@ -43,18 +44,30 @@ type Quasar struct {
 	mutex           *sync.RWMutex
 	peers           []peer
 	history         dejavu.DejaVu // memory of past events
-	cfg             *Config
+	cfg             *config
 	filters         [][]byte // own (subs + peers)
 	stopDispatcher  chan bool
 	stopPropagation chan bool
 }
 
-func NewQuasar(net overlayNetwork, c Config) *Quasar {
-	// TODO validate input
-	if !validConfig(&c) {
-		return nil // FIXME return additional err
+// Create new quasar instance
+func NewQuasar() *Quasar {
+	c := config{
+		defaultEventTTL:     1024,
+		dispatcherDelay:     1,        // responsive as possible
+		filterFreshness:     50,       // 50sec (>2.5 propagation miss)
+		propagationInterval: 20,       // 20sec (~0.5m/min const traffic)
+		historyLimit:        65536,    // FIXME increase
+		historyAccuracy:     0.000001, // FIXME increase
+		filtersDepth:        8,        // reaches many many nodes
+		filtersM:            8192,     // 1k
+		filtersK:            6,        // (m / n) log(2)
 	}
-	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
+	return newQuasar(nil, c)
+}
+
+func newQuasar(net overlayNetwork, c config) *Quasar {
+	d := dejavu.NewProbabilistic(c.historyLimit, c.historyAccuracy)
 	return &Quasar{
 		net:             net,
 		subscribers:     make(map[hash160digest][]chan []byte),
@@ -75,7 +88,7 @@ func (q *Quasar) processUpdate(u *update) {
 
 func (q *Quasar) Publish(topic []byte, message []byte) {
 	// TODO validate input
-	go q.route(newEvent(topic, message, q.cfg.DefaultEventTTL))
+	go q.route(newEvent(topic, message, q.cfg.defaultEventTTL))
 }
 
 func (q *Quasar) isDuplicate(e *event) bool {
@@ -101,13 +114,14 @@ func (q *Quasar) sendUpdates() {
 		if p.isExpired(q.cfg) {
 			continue
 		}
-		for i := 1; uint32(i) < q.cfg.FiltersDepth; i++ {
+		for i := 1; uint32(i) < q.cfg.filtersDepth; i++ {
 			filters[i] = mergeFilters(filters[i], p.filters[i-1])
 		}
 	}
 	q.filters = filters
 	for _, p := range q.peers {
-		for i := 0; uint32(i) < q.cfg.FiltersDepth; i++ {
+		for i := 0; uint32(i) < (q.cfg.filtersDepth - 1); i++ {
+			// top filter never sent as not used by peers
 			go q.net.SendUpdate(p.pubkey, uint(i), filters[i])
 		}
 	}
@@ -135,7 +149,7 @@ func (q *Quasar) route(e *event) {
 		q.mutex.RUnlock()
 		return
 	}
-	for i := 0; uint32(i) < q.cfg.FiltersDepth; i++ {
+	for i := 0; uint32(i) < q.cfg.filtersDepth; i++ {
 		for _, p := range q.peers {
 			f := p.filters[i]
 			if filterContainsDigest(f, *e.topicDigest, q.cfg) {
@@ -177,7 +191,7 @@ func (q *Quasar) dispatchInput() {
 		case <-q.stopDispatcher:
 			return // TODO confirm stopped
 		}
-		time.Sleep(q.cfg.DispatcherDelay * time.Millisecond)
+		time.Sleep(q.cfg.dispatcherDelay * time.Millisecond)
 	}
 }
 
