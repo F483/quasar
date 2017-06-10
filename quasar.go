@@ -8,26 +8,37 @@ import (
 )
 
 // FIXME use io.Reader and io.Writer where possible
+// FIXME create thread that removes expired peer data
 
 type config struct {
-	defaultEventTTL     uint32        // decremented every hop
-	dispatcherDelay     time.Duration // in ms FIXME uint64
-	filterFreshness     uint64        // in seconds
-	propagationInterval uint64        // in seconds
-	historyLimit        uint32        // entries remembered
-	historyAccuracy     float64       // chance of error
-	filtersDepth        uint32        // filter stack height
-	filtersM            uint64        // size in bits (multiple of 64)
-	filtersK            uint64        // number of hashes
+	defaultEventTTL  uint32  // decremented every hop
+	filterFreshness  uint64  // in seconds
+	propagationDelay uint64  // in seconds
+	historyLimit     uint32  // entries remembered
+	historyAccuracy  float64 // chance of error
+	filtersDepth     uint32  // filter stack height
+	filtersM         uint64  // size in bits (multiple of 64)
+	filtersK         uint64  // number of hashes
 }
 
-type peer struct {
-	pubkey     *pubkey
+// FIXME use individual constants once optimal values found
+var defaultConfig = config{
+	defaultEventTTL:  32,              // 4 missed wells
+	filterFreshness:  50,              // 50sec (>2.5 propagation)
+	propagationDelay: 20,              // 20sec (~0.5M/min const traffic)
+	historyLimit:     1048576,         // remember last 1G
+	historyAccuracy:  1.0 / 1048576.0, // avg 1 false positive per 1G
+	filtersDepth:     8,               // reaches many many nodes
+	filtersM:         8192,            // 1K (packet under safe MTU 1400)
+	filtersK:         6,               // (m / n) log(2)
+}
+
+type peerData struct {
 	filters    [][]byte
 	timestamps []uint64 // unixtime
 }
 
-func (p *peer) isExpired(c *config) bool {
+func peerDataExpired(p *peerData, c config) bool {
 	now := uint64(time.Now().Unix())
 	for _, timestamp := range p.timestamps {
 		if timestamp >= (now - c.filterFreshness) {
@@ -38,52 +49,58 @@ func (p *peer) isExpired(c *config) bool {
 }
 
 type Quasar struct {
-	net             overlayNetwork
-	subscribers     map[hash160digest][]chan []byte
-	topics          map[hash160digest][]byte
-	mutex           *sync.RWMutex
-	peers           []peer
-	history         dejavu.DejaVu // memory of past events
-	cfg             *config
-	filters         [][]byte // own (subs + peers)
-	stopDispatcher  chan bool
-	stopPropagation chan bool
+	net               network
+	subscribers       map[hash160digest][]chan []byte
+	topics            map[hash160digest][]byte
+	mutex             *sync.RWMutex
+	peers             map[pubkey]*peerData
+	history           dejavu.DejaVu // memory of past events
+	cfg               config
+	filters           [][]byte // own (subs + peers)
+	stopDispatcher    chan bool
+	stopPropagation   chan bool
+	stopExpiredPeerGC chan bool
 }
 
 // Create new quasar instance
 func NewQuasar() *Quasar {
-	c := config{
-		defaultEventTTL:     1024,
-		dispatcherDelay:     1,        // responsive as possible
-		filterFreshness:     50,       // 50sec (>2.5 propagation miss)
-		propagationInterval: 20,       // 20sec (~0.5m/min const traffic)
-		historyLimit:        65536,    // FIXME increase
-		historyAccuracy:     0.000001, // FIXME increase
-		filtersDepth:        8,        // reaches many many nodes
-		filtersM:            8192,     // 1k
-		filtersK:            6,        // (m / n) log(2)
-	}
-	return newQuasar(nil, c)
+	return newQuasar(nil, defaultConfig) // FIXME add default network
 }
 
-func newQuasar(net overlayNetwork, c config) *Quasar {
+func newQuasar(net network, c config) *Quasar {
 	d := dejavu.NewProbabilistic(c.historyLimit, c.historyAccuracy)
 	return &Quasar{
-		net:             net,
-		subscribers:     make(map[hash160digest][]chan []byte),
-		topics:          make(map[hash160digest][]byte),
-		mutex:           new(sync.RWMutex),
-		peers:           make([]peer, 0),
-		history:         d,
-		cfg:             &c,
-		filters:         nil,
-		stopDispatcher:  nil, // set on Start() call
-		stopPropagation: nil, // set on Start() call
+		net:               net,
+		subscribers:       make(map[hash160digest][]chan []byte),
+		topics:            make(map[hash160digest][]byte),
+		mutex:             new(sync.RWMutex),
+		peers:             make(map[pubkey]*peerData),
+		history:           d,
+		cfg:               c,
+		filters:           nil,
+		stopDispatcher:    nil, // set on Start() call
+		stopPropagation:   nil, // set on Start() call
+		stopExpiredPeerGC: nil, // set on Start() call
 	}
 }
 
 func (q *Quasar) processUpdate(u *update) {
-	// TODO implement
+	q.mutex.Lock()
+	data, ok := q.peers[*u.peer]
+
+	if !ok { // init if doesnt exist
+		depth := q.cfg.filtersDepth
+		data = &peerData{
+			filters:    newFilters(q.cfg),
+			timestamps: make([]uint64, depth, depth),
+		}
+		q.peers[*u.peer] = data
+	}
+
+	// update peer data
+	data.filters[u.index] = u.filter
+	data.timestamps[u.index] = uint64(time.Now().Unix())
+	q.mutex.Unlock()
 }
 
 func (q *Quasar) Publish(topic []byte, message []byte) {
@@ -110,19 +127,19 @@ func (q *Quasar) sendUpdates() {
 	}
 	pubkey := q.net.Id()
 	filters[0] = filterInsert(filters[0], pubkey[:], q.cfg)
-	for _, p := range q.peers {
-		if p.isExpired(q.cfg) {
+	for _, data := range q.peers {
+		if peerDataExpired(data, q.cfg) {
 			continue
 		}
 		for i := 1; uint32(i) < q.cfg.filtersDepth; i++ {
-			filters[i] = mergeFilters(filters[i], p.filters[i-1])
+			filters[i] = mergeFilters(filters[i], data.filters[i-1])
 		}
 	}
 	q.filters = filters
-	for _, p := range q.peers {
+	for peerId, _ := range q.peers {
 		for i := 0; uint32(i) < (q.cfg.filtersDepth - 1); i++ {
 			// top filter never sent as not used by peers
-			go q.net.SendUpdate(p.pubkey, uint(i), filters[i])
+			go q.net.SendUpdate(&peerId, uint(i), filters[i])
 		}
 	}
 	q.mutex.Unlock()
@@ -138,8 +155,8 @@ func (q *Quasar) route(e *event) {
 	if receivers, ok := q.subscribers[*e.topicDigest]; ok {
 		q.deliver(receivers, e)
 		e.publishers = append(e.publishers, q.net.Id())
-		for _, p := range q.peers {
-			q.net.SendEvent(p.pubkey, e)
+		for peerId, _ := range q.peers {
+			go q.net.SendEvent(&peerId, e)
 		}
 		q.mutex.RUnlock()
 		return
@@ -150,8 +167,8 @@ func (q *Quasar) route(e *event) {
 		return
 	}
 	for i := 0; uint32(i) < q.cfg.filtersDepth; i++ {
-		for _, p := range q.peers {
-			f := p.filters[i]
+		for peerId, data := range q.peers {
+			f := data.filters[i]
 			if filterContainsDigest(f, *e.topicDigest, q.cfg) {
 				negRt := false
 				for _, publisher := range e.publishers {
@@ -160,7 +177,7 @@ func (q *Quasar) route(e *event) {
 					}
 				}
 				if !negRt {
-					q.net.SendEvent(p.pubkey, e)
+					go q.net.SendEvent(&peerId, e)
 					q.mutex.RUnlock()
 					return
 				}
@@ -168,20 +185,28 @@ func (q *Quasar) route(e *event) {
 		}
 	}
 	if len(q.peers) > 0 {
-		p := q.peers[rand.Intn(len(q.peers))]
-		q.net.SendEvent(p.pubkey, e)
+		go q.net.SendEvent(q.randomPeer(), e)
 	}
 	q.mutex.RUnlock()
+}
+
+func (q *Quasar) randomPeer() *pubkey {
+	i := 0
+	choice := rand.Intn(len(q.peers))
+	for peerId, _ := range q.peers {
+		if i == choice {
+			return &peerId
+		}
+		i++
+	}
+	panic("unreachable")
 }
 
 func (q *Quasar) dispatchInput() {
 	for {
 		select {
 		case update := <-q.net.ReceivedUpdateChannel():
-			q.mutex.RLock()
-			valid := validUpdate(update, q.cfg)
-			q.mutex.RUnlock()
-			if valid {
+			if validUpdate(update, q.cfg) {
 				go q.processUpdate(update)
 			}
 		case event := <-q.net.ReceivedEventChannel():
@@ -191,12 +216,45 @@ func (q *Quasar) dispatchInput() {
 		case <-q.stopDispatcher:
 			return // TODO confirm stopped
 		}
-		time.Sleep(q.cfg.dispatcherDelay * time.Millisecond)
+	}
+}
+
+func (q *Quasar) removeExpiredPeers() {
+	q.mutex.Lock()
+	toRemove := []*pubkey{}
+	for peerId, data := range q.peers {
+		if peerDataExpired(data, q.cfg) {
+			toRemove = append(toRemove, &peerId)
+		}
+	}
+	for _, peerId := range toRemove {
+		delete(q.peers, *peerId)
+	}
+	q.mutex.Unlock()
+}
+
+func (q *Quasar) expiredPeerGC() {
+	delay := time.Duration(1) * time.Millisecond
+	for {
+		select {
+		case <-time.After(delay):
+			go q.removeExpiredPeers()
+		case <-q.stopExpiredPeerGC:
+			return // TODO confirm stopped
+		}
 	}
 }
 
 func (q *Quasar) propagateFilters() {
-	// TODO implement
+	delay := time.Duration(q.cfg.propagationDelay) * time.Second
+	for {
+		select {
+		case <-time.After(delay):
+			go q.sendUpdates()
+		case <-q.stopPropagation:
+			return // TODO confirm stopped
+		}
+	}
 }
 
 // Start quasar system
@@ -204,8 +262,10 @@ func (q *Quasar) Start() {
 	q.net.Start()
 	q.stopDispatcher = make(chan bool)
 	q.stopPropagation = make(chan bool)
+	q.stopExpiredPeerGC = make(chan bool)
 	go q.dispatchInput()
 	go q.propagateFilters()
+	go q.expiredPeerGC()
 }
 
 // Stop quasar system
@@ -213,6 +273,7 @@ func (q *Quasar) Stop() {
 	q.net.Stop()
 	q.stopDispatcher <- true
 	q.stopPropagation <- true
+	q.stopExpiredPeerGC <- true
 }
 
 // Subscribe provided message receiver channel to given topic.

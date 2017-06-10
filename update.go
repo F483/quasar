@@ -6,7 +6,7 @@ type update struct {
 	filter []byte
 }
 
-func validUpdate(u *update, c *config) bool {
+func validUpdate(u *update, c config) bool {
 	return u != nil && u.peer != nil &&
 		u.index < (c.filtersDepth-1) && // top filter never propagated
 		uint64(len(u.filter)) == (c.filtersM/8)
