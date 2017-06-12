@@ -93,21 +93,21 @@ func TestSubscriptions(t *testing.T) {
 	q.Subscribe([]byte("a"), a)
 	subs := q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
-		t.Errorf("Incorrect subscriptions! ", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	b1 := make(chan []byte)
 	q.Subscribe([]byte("b"), b1)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
-		t.Errorf("Incorrect subscriptions! ", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	b2 := make(chan []byte)
 	q.Subscribe([]byte("b"), b2)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
-		t.Errorf("Incorrect subscriptions! ", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	c1 := make(chan []byte)
@@ -115,7 +115,7 @@ func TestSubscriptions(t *testing.T) {
 	subs = q.Subscriptions()
 	expectedSubs := [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
-		t.Errorf("Incorrect subscriptions!", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	c2 := make(chan []byte)
@@ -123,14 +123,14 @@ func TestSubscriptions(t *testing.T) {
 	subs = q.Subscriptions()
 	expectedSubs = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
-		t.Errorf("Incorrect subscriptions!", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	// test clears all if no receiver provided
 	q.Unsubscribe([]byte("c"), nil)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
-		t.Errorf("Incorrect subscriptions!", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 
 	// only clears specific receiver
@@ -140,7 +140,7 @@ func TestSubscriptions(t *testing.T) {
 	q.Unsubscribe([]byte("b"), b1)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
-		t.Errorf("Incorrect subscriptions!", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 	if len(q.Subscribers([]byte("b"))) != 1 {
 		t.Errorf("Incorrect subscribers!")
@@ -150,7 +150,7 @@ func TestSubscriptions(t *testing.T) {
 	q.Unsubscribe([]byte("b"), b2)
 	subs = q.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
-		t.Errorf("Incorrect subscriptions!", subs)
+		t.Errorf("Incorrect subscriptions!")
 	}
 }
 

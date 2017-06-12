@@ -12,7 +12,7 @@ func TestHash160(t *testing.T) {
 	topic := make([]byte, hex.DecodedLen(len(topicHex)))
 	topicBytesLen, err := hex.Decode(topic, topicHex)
 	if topicBytesLen != 2 {
-		t.Errorf("Impossible bytes len: %i", topicBytesLen)
+		t.Errorf("Impossible bytes len: %d", topicBytesLen)
 	}
 	if err != nil {
 		t.Fatal(err)
@@ -26,7 +26,7 @@ func TestHash160(t *testing.T) {
 		t.Fatal(err)
 	}
 	if expectedBytesLen != 20 {
-		t.Errorf("Incorrect digest size! %i", expectedBytesLen)
+		t.Errorf("Incorrect digest size! %d", expectedBytesLen)
 	}
 
 	digest := hash160(topic)
