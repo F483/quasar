@@ -9,6 +9,7 @@ import (
 
 // FIXME use io.Reader and io.Writer where possible
 
+// Quasar holds the pubsup state
 type Quasar struct {
 	net               networkOverlay
 	subscribers       map[hash160digest][]chan []byte
@@ -22,8 +23,9 @@ type Quasar struct {
 	stopExpiredPeerGC chan bool
 }
 
-// Create new quasar instance
+// NewQuasar create new instance with the sane defaults.
 func NewQuasar() *Quasar {
+	// FIXME enable passing of nodeId/pubkey
 	return newQuasar(nil, defaultConfig) // FIXME add default network
 }
 
@@ -62,6 +64,7 @@ func (q *Quasar) processUpdate(u *peerUpdate) {
 	q.mutex.Unlock()
 }
 
+// Publish a message on the network for given topic.
 func (q *Quasar) Publish(topic []byte, message []byte) {
 	// TODO validate input
 	go q.route(newEvent(topic, message, q.cfg.defaultEventTTL))
@@ -290,7 +293,7 @@ func (q *Quasar) Subscribers(topic []byte) []chan []byte {
 	return results
 }
 
-// SubscribedTopics retruns a slice of currently subscribed topics.
+// Subscriptions retruns a slice of currently subscribed topics.
 func (q *Quasar) Subscriptions() [][]byte {
 	q.mutex.RLock()
 	topics := make([][]byte, len(q.topics))
