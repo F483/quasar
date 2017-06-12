@@ -29,10 +29,10 @@ func validUpdate(u *peerUpdate, c config) bool {
 		uint64(len(u.filter)) == (c.filtersM/8)
 }
 
-func serializeUpdate(u *peerUpdate) []byte {
-	return nil // TODO implement
-}
-
-func deserializeUpdate(data []byte) *peerUpdate {
-	return nil // TODO implement
-}
+// func serializePeerUpdate(u *peerUpdate) []byte {
+// 	return nil // TODO implement
+// }
+//
+// func deserializePeerUpdate(data []byte) *peerUpdate {
+// 	return nil // TODO implement
+// }

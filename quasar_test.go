@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// FIXME only mock until network layer implemented
 type MockNetwork struct {
 	peers          []*pubkey
 	connections    map[pubkey][]pubkey
@@ -78,10 +79,10 @@ func TestNewEvent(t *testing.T) {
 
 func TestSubscriptions(t *testing.T) {
 	q := newQuasar(nil, config{
-		defaultEventTTL:  1024,
+		defaultEventTTL:  32,
 		filterFreshness:  3,
 		propagationDelay: 1,
-		historyLimit:     4096,
+		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
 		filtersM:         8192, // m 1k
@@ -172,10 +173,7 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 	return true
 }
 
-func setupMockNetwork(cfg config) []*Quasar {
-
-	netSize := 20
-	connCnt := 20
+func setupMockNetwork(cfg config, netSize int, connCnt int) []*Quasar {
 
 	net := &MockNetwork{
 		peers:          make([]*pubkey, netSize, netSize),
@@ -213,19 +211,19 @@ func setupMockNetwork(cfg config) []*Quasar {
 	return nodes
 }
 
-func TestEventPropagation(t *testing.T) {
+func TestEventDelivery(t *testing.T) {
 	cfg := config{
-		defaultEventTTL:  1024,
+		defaultEventTTL:  32,
 		filterFreshness:  3,
 		propagationDelay: 1,
-		historyLimit:     4096,
+		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
 		filtersM:         8192, // m 1k
 		filtersK:         6,    // hashes
 	}
 
-	nodes := setupMockNetwork(cfg)
+	nodes := setupMockNetwork(cfg, 20, 20)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -250,8 +248,88 @@ func TestEventPropagation(t *testing.T) {
 		}
 	}
 
-	// start nodes
+	// stop nodes
 	for _, node := range nodes {
 		node.Stop()
 	}
+}
+
+func TestEventTimeout(t *testing.T) {
+	// get coverage for dropping ttl = 0 events
+	// may be dropped by history with few nodes
+
+	cfg := config{
+		defaultEventTTL:  2,
+		filterFreshness:  3,
+		propagationDelay: 1,
+		historyLimit:     256,
+		historyAccuracy:  0.000001,
+		filtersDepth:     8,
+		filtersM:         8192, // m 1k
+		filtersK:         6,    // hashes
+	}
+
+	nodes := setupMockNetwork(cfg, 20, 20)
+
+	// start nodes and wait for filters to propagate
+	for _, node := range nodes {
+		node.Start()
+	}
+	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*3))
+
+	// create event
+	nodes[1].Publish([]byte("bar"), []byte("bardata"))
+	time.Sleep(time.Duration(cfg.propagationDelay) * time.Second)
+
+	// stop nodes
+	for _, node := range nodes {
+		node.Stop()
+	}
+}
+
+func TestExpiredPeerData(t *testing.T) {
+	cfg := config{
+		defaultEventTTL:  2,
+		filterFreshness:  3,
+		propagationDelay: 1,
+		historyLimit:     256,
+		historyAccuracy:  0.000001,
+		filtersDepth:     8,
+		filtersM:         8192, // m 1k
+		filtersK:         6,    // hashes
+	}
+
+	nodes := setupMockNetwork(cfg, 2, 2)
+
+	// start nodes and wait for filters to propagate
+	nodes[0].Start()
+	nodes[1].Start()
+
+	// let filters propagate
+	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*2))
+
+	nodes[0].Stop() //
+
+	// let filters expire
+	time.Sleep(time.Second * time.Duration(cfg.filterFreshness*2))
+
+	nodes[1].Stop()
+}
+
+func TestNoPeers(t *testing.T) {
+	cfg := config{
+		defaultEventTTL:  2,
+		filterFreshness:  3,
+		propagationDelay: 1,
+		historyLimit:     256,
+		historyAccuracy:  0.000001,
+		filtersDepth:     8,
+		filtersM:         8192, // m 1k
+		filtersK:         6,    // hashes
+	}
+
+	nodes := setupMockNetwork(cfg, 1, 0)
+	nodes[0].Start()
+	nodes[0].Publish([]byte("bar"), []byte("bardata"))
+	nodes[0].Stop()
 }

@@ -4,8 +4,11 @@ import "testing"
 
 func TestEvent(t *testing.T) {
 
-	// new creates valid event
+	// new always creates valid event
 	if !validEvent(newEvent([]byte("foo"), []byte("bar"), 1)) {
+		t.Errorf("Expected valid event!")
+	}
+	if !validEvent(newEvent(nil, nil, 0)) {
 		t.Errorf("Expected valid event!")
 	}
 

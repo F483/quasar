@@ -28,10 +28,10 @@ func validEvent(e *event) bool {
 		e.publishers != nil && e.topicDigest != nil
 }
 
-func serializeEvent(e *event) []byte {
-	return nil // TODO implement
-}
-
-func deserializeEvent(data []byte) *event {
-	return nil // TODO implement
-}
+// func serializeEvent(e *event) []byte {
+// 	return nil // TODO implement
+// }
+//
+// func deserializeEvent(data []byte) *event {
+// 	return nil // TODO implement
+// }
