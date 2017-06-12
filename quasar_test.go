@@ -1,20 +1,22 @@
 package quasar
 
 import (
+	"math/rand"
 	"reflect"
 	"testing"
+	"time"
 )
 
 type MockNetwork struct {
-	peers          []pubkey
+	peers          []*pubkey
 	connections    map[pubkey][]pubkey
-	updateChannels map[pubkey]chan update
-	eventChannels  map[pubkey]chan event
+	updateChannels map[pubkey]chan *peerUpdate
+	eventChannels  map[pubkey]chan *event
 }
 
 type MockOverlay struct {
-	peer    pubkey
-	network MockNetwork
+	peer pubkey
+	net  *MockNetwork
 }
 
 func (mqt *MockOverlay) Id() pubkey {
@@ -22,25 +24,24 @@ func (mqt *MockOverlay) Id() pubkey {
 }
 
 func (mqt *MockOverlay) ConnectedPeers() []pubkey {
-	return mqt.network.connections[mqt.peer]
+	return mqt.net.connections[mqt.peer]
 }
 
-func (mqt *MockOverlay) ReceivedEventChannel() chan event {
-	return mqt.network.eventChannels[mqt.peer]
-
+func (mqt *MockOverlay) ReceivedEventChannel() chan *event {
+	return mqt.net.eventChannels[mqt.peer]
 }
 
-func (mqt *MockOverlay) ReceivedUpdateChannel() chan update {
-	return mqt.network.updateChannels[mqt.peer]
+func (mqt *MockOverlay) ReceivedUpdateChannel() chan *peerUpdate {
+	return mqt.net.updateChannels[mqt.peer]
 }
 
-func (mqt *MockOverlay) SendEvent(p *pubkey, e event) {
-	mqt.network.eventChannels[*p] <- e
+func (mqt *MockOverlay) SendEvent(id *pubkey, e *event) {
+	mqt.net.eventChannels[*id] <- e
 }
 
-func (mqt *MockOverlay) SendUpdate(p *pubkey, i uint32, filter []byte) {
-	u := update{peer: &mqt.peer, index: i, filter: filter}
-	mqt.network.updateChannels[*p] <- u
+func (mqt *MockOverlay) SendUpdate(id *pubkey, i uint32, filter []byte) {
+	u := &peerUpdate{peer: &mqt.peer, index: i, filter: filter}
+	mqt.net.updateChannels[*id] <- u
 }
 
 func (mqt *MockOverlay) Start() {
@@ -49,6 +50,10 @@ func (mqt *MockOverlay) Start() {
 
 func (mqt *MockOverlay) Stop() {
 
+}
+
+func genPubKey() *pubkey {
+	return nil // FIXME implement
 }
 
 func TestNewEvent(t *testing.T) {
@@ -74,11 +79,11 @@ func TestNewEvent(t *testing.T) {
 func TestSubscriptions(t *testing.T) {
 	q := newQuasar(nil, config{
 		defaultEventTTL:  1024,
-		filterFreshness:  180,
-		propagationDelay: 60,
-		historyLimit:     65536,
+		filterFreshness:  3,
+		propagationDelay: 1,
+		historyLimit:     4096,
 		historyAccuracy:  0.000001,
-		filtersDepth:     1024,
+		filtersDepth:     8,
 		filtersM:         8192, // m 1k
 		filtersK:         6,    // hashes
 	})
@@ -165,4 +170,88 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 		}
 	}
 	return true
+}
+
+func setupMockNetwork(cfg config) []*Quasar {
+
+	netSize := 20
+	connCnt := 20
+
+	net := &MockNetwork{
+		peers:          make([]*pubkey, netSize, netSize),
+		connections:    make(map[pubkey][]pubkey),
+		updateChannels: make(map[pubkey]chan *peerUpdate),
+		eventChannels:  make(map[pubkey]chan *event),
+	}
+
+	// create peers and channels
+	for i := 0; i < netSize; i++ {
+		var peerId pubkey
+		rand.Read(peerId[:])
+		net.peers[i] = &peerId
+		net.updateChannels[peerId] = make(chan *peerUpdate)
+		net.eventChannels[peerId] = make(chan *event)
+	}
+
+	// create connections
+	for i := 0; i < netSize; i++ {
+		peerId := net.peers[i]
+		net.connections[*peerId] = make([]pubkey, connCnt, connCnt)
+		for j := 0; j < connCnt; j++ {
+			neighbour := net.peers[(i+j)%connCnt]
+			net.connections[*peerId][j] = *neighbour
+		}
+	}
+
+	// create quasar nodes
+	nodes := make([]*Quasar, netSize, netSize)
+	for i := 0; i < netSize; i++ {
+		no := MockOverlay{peer: *net.peers[i], net: net}
+		nodes[i] = newQuasar(&no, cfg)
+	}
+
+	return nodes
+}
+
+func TestEventPropagation(t *testing.T) {
+	cfg := config{
+		defaultEventTTL:  1024,
+		filterFreshness:  3,
+		propagationDelay: 1,
+		historyLimit:     4096,
+		historyAccuracy:  0.000001,
+		filtersDepth:     8,
+		filtersM:         8192, // m 1k
+		filtersK:         6,    // hashes
+	}
+
+	nodes := setupMockNetwork(cfg)
+
+	// set subscriptions
+	fooReceiver := make(chan []byte)
+	nodes[0].Subscribe([]byte("foo"), fooReceiver)
+
+	// start nodes and wait for filters to propagate
+	for _, node := range nodes {
+		node.Start()
+	}
+	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*3))
+
+	// create event
+	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
+
+	timeout := time.Duration(cfg.propagationDelay) * time.Second
+	select {
+	case <-time.After(timeout):
+		t.Errorf("Timeout event not received!")
+	case data := <-fooReceiver:
+		if !reflect.DeepEqual(data, []byte("foodata")) {
+			t.Errorf("Incorrect event data!")
+		}
+	}
+
+	// start nodes
+	for _, node := range nodes {
+		node.Stop()
+	}
 }

@@ -17,7 +17,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// valid update
-	u := &update{
+	u := &peerUpdate{
 		peer:   &pk,
 		index:  0,
 		filter: make([]byte, 8192/8, 8192/8),
@@ -32,7 +32,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// nil peer
-	u = &update{
+	u = &peerUpdate{
 		peer:   nil,
 		index:  0,
 		filter: make([]byte, 8192/8, 8192/8),
@@ -42,7 +42,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// index to large
-	u = &update{
+	u = &peerUpdate{
 		peer:   &pk,
 		index:  1024,
 		filter: make([]byte, 8192/8, 8192/8),
@@ -52,7 +52,7 @@ func TestUpdate(t *testing.T) {
 	}
 
 	// incorrect filter len
-	u = &update{
+	u = &peerUpdate{
 		peer:   &pk,
 		index:  1,
 		filter: make([]byte, 1024/8, 1024/8),

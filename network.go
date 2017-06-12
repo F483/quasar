@@ -9,13 +9,13 @@ package quasar
 // * Type: 1 byte
 // * Payload: 1024 bytes max
 
-type network interface {
+type networkOverlay interface {
 	Id() pubkey
 	ConnectedPeers() []pubkey
 	ReceivedEventChannel() chan *event
-	ReceivedUpdateChannel() chan *update
+	ReceivedUpdateChannel() chan *peerUpdate
 	SendEvent(peerId *pubkey, e *event)
-	SendUpdate(peerId *pubkey, index uint, filter []byte)
+	SendUpdate(peerId *pubkey, index uint32, filter []byte)
 	Start()
 	Stop()
 }
