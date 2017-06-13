@@ -46,8 +46,19 @@ func newQuasar(net networkOverlay, c config) *Quasar {
 	}
 }
 
+func (q *Quasar) isConnected(peerId *pubkey) bool {
+	for _, connectedPeerId := range q.net.ConnectedPeers() {
+		if connectedPeerId == *peerId {
+			return true
+		}
+	}
+	return false
+}
+
 func (q *Quasar) processUpdate(u *peerUpdate) {
-	// TODO ignore peers not in q.net.ConnectedPeers()?
+	if q.isConnected(u.peer) == false {
+		return // ignore to prevent memory attack
+	}
 
 	q.mutex.Lock()
 	data, ok := q.peers[*u.peer]
