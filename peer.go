@@ -7,8 +7,12 @@ type peerData struct {
 	timestamps []uint64 // unixtime
 }
 
+func makePeerTimestamp() uint64 {
+	return uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
+}
+
 func peerDataExpired(p *peerData, c config) bool {
-	now := uint64(time.Now().Unix())
+	now := makePeerTimestamp()
 	for _, timestamp := range p.timestamps {
 		if timestamp >= (now - c.filterFreshness) {
 			return false

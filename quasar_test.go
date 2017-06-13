@@ -304,7 +304,7 @@ func TestExpiredPeerData(t *testing.T) {
 	// let filters propagate
 	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*2))
 
-	nodes[0].Stop() //
+	nodes[0].Stop()
 
 	// let filters expire
 	time.Sleep(time.Millisecond * time.Duration(cfg.filterFreshness*2))

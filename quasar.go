@@ -47,6 +47,8 @@ func newQuasar(net networkOverlay, c config) *Quasar {
 }
 
 func (q *Quasar) processUpdate(u *peerUpdate) {
+	// TODO ignore peers not in q.net.ConnectedPeers()?
+
 	q.mutex.Lock()
 	data, ok := q.peers[*u.peer]
 
@@ -61,7 +63,7 @@ func (q *Quasar) processUpdate(u *peerUpdate) {
 
 	// update peer data
 	data.filters[u.index] = u.filter
-	data.timestamps[u.index] = uint64(time.Now().Unix())
+	data.timestamps[u.index] = makePeerTimestamp()
 	q.mutex.Unlock()
 }
 
