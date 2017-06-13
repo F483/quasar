@@ -55,23 +55,27 @@ func filterInsertDigest(f []byte, c config, ds ...hash160digest) []byte {
 	return serializeFilter(bf)
 }
 
-func mergeFilters(a []byte, b []byte) []byte {
-
+func mergeFilters(a []byte, b []byte, n ...[]byte) []byte {
+	resultSize := len(a)
+	resultFilter := make([]byte, resultSize, resultSize)
 	errMsg := "Filter m missmatch: %d != %d"
-	mustBeTrue(len(a) == len(b), errMsg, len(a), len(b))
+	for _, f := range append([][]byte{a, b}, n...) {
+		mustBeTrue(resultSize == len(f), errMsg, resultSize, len(f))
 
-	c := make([]byte, len(a), len(a))
-	for i := 0; i < len(c); i++ {
-		c[i] = a[i] | b[i]
+		m := make([]byte, resultSize, resultSize)
+		for i := 0; i < len(m); i++ {
+			m[i] = resultFilter[i] | f[i]
+		}
+		resultFilter = m
 	}
-	return c
+	return resultFilter
 }
 
-func filterContains(f []byte, data []byte, c config) bool {
-	return filterContainsDigest(f, hash160(data), c)
+func filterContains(f []byte, c config, data []byte) bool {
+	return filterContainsDigest(f, c, hash160(data))
 }
 
-func filterContainsDigest(f []byte, d hash160digest, c config) bool {
+func filterContainsDigest(f []byte, c config, d hash160digest) bool {
 	bf := deserializeFilter(f, c)
 	return bf.Test(d[:])
 }

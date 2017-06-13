@@ -20,35 +20,40 @@ func TestFilters(t *testing.T) {
 	}
 
 	a := filterInsert(filters[0], cfg, []byte("foo"))
-	if filterContains(a, []byte("foo"), cfg) == false {
+	if filterContains(a, cfg, []byte("foo")) == false {
 		t.Errorf("Filter doesnt contain added value!")
 	}
-	if filterContains(a, []byte("bar"), cfg) != false {
+	if filterContains(a, cfg, []byte("bar")) != false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
-	if filterContains(a, []byte("baz"), cfg) != false {
+	if filterContains(a, cfg, []byte("baz")) != false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
 
 	b := filterInsert(filters[1], cfg, []byte("bar"))
-	if filterContains(b, []byte("bar"), cfg) == false {
+	if filterContains(b, cfg, []byte("bar")) == false {
 		t.Errorf("Filter doesnt contain added value!")
 	}
-	if filterContains(b, []byte("foo"), cfg) != false {
+	if filterContains(b, cfg, []byte("foo")) != false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
-	if filterContains(b, []byte("baz"), cfg) != false {
+	if filterContains(b, cfg, []byte("baz")) != false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
 
-	c := mergeFilters(a, b)
-	if filterContains(c, []byte("foo"), cfg) == false {
+	c := filterInsert(filters[2], cfg, []byte("baz"))
+
+	m := mergeFilters(a, b, c)
+	if filterContains(m, cfg, []byte("foo")) == false {
 		t.Errorf("Merged filter missing expected value!")
 	}
-	if filterContains(c, []byte("bar"), cfg) == false {
+	if filterContains(m, cfg, []byte("bar")) == false {
 		t.Errorf("Merged filter missing expected value!")
 	}
-	if filterContains(c, []byte("baz"), cfg) != false {
+	if filterContains(m, cfg, []byte("baz")) == false {
+		t.Errorf("Merged filter missing expected value!")
+	}
+	if filterContains(m, cfg, []byte("bam")) != false {
 		t.Errorf("Merged filter contains unexpecded value!")
 	}
 }
@@ -69,13 +74,13 @@ func TestFiltersVariadic(t *testing.T) {
 
 	a := filterInsert(filters[0], cfg, []byte("foo"), []byte("bar"))
 
-	if filterContains(a, []byte("foo"), cfg) == false {
+	if filterContains(a, cfg, []byte("foo")) == false {
 		t.Errorf("Filter doesnt contain added value!")
 	}
-	if filterContains(a, []byte("bar"), cfg) == false {
+	if filterContains(a, cfg, []byte("bar")) == false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
-	if filterContains(a, []byte("baz"), cfg) != false {
+	if filterContains(a, cfg, []byte("baz")) != false {
 		t.Errorf("Filter contains unexpecded value!")
 	}
 }

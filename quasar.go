@@ -131,10 +131,10 @@ func (q *Quasar) route(e *event) {
 	for i := 0; uint32(i) < q.cfg.filtersDepth; i++ {
 		for peerId, data := range q.peers {
 			f := data.filters[i]
-			if filterContainsDigest(f, *e.topicDigest, q.cfg) {
+			if filterContainsDigest(f, q.cfg, *e.topicDigest) {
 				negRt := false
 				for _, publisher := range e.publishers {
-					if filterContains(f, publisher[:], q.cfg) {
+					if filterContains(f, q.cfg, publisher[:]) {
 						negRt = true
 					}
 				}
