@@ -26,7 +26,8 @@ type Quasar struct {
 // NewQuasar create new instance with the sane defaults.
 func NewQuasar() *Quasar {
 	// FIXME enable passing of nodeId/pubkey
-	return newQuasar(nil, defaultConfig) // FIXME add default network
+	// FIXME add default network
+	return newQuasar(nil, defaultConfig)
 }
 
 func newQuasar(net networkOverlay, c config) *Quasar {
@@ -205,7 +206,7 @@ func (q *Quasar) expiredPeerGC() {
 }
 
 func (q *Quasar) propagateFilters() {
-	delay := time.Duration(q.cfg.propagationDelay) * time.Second
+	delay := time.Duration(q.cfg.propagationDelay) * time.Millisecond
 	for {
 		select {
 		case <-time.After(delay):

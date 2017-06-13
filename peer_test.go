@@ -8,7 +8,7 @@ func TestUpdate(t *testing.T) {
 	cfg := config{
 		defaultEventTTL:  1024,
 		filterFreshness:  180,
-		propagationDelay: 60,
+		propagationDelay: 60000,
 		historyLimit:     65536,
 		historyAccuracy:  0.000001,
 		filtersDepth:     1024,

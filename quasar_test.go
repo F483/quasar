@@ -53,10 +53,6 @@ func (mqt *MockOverlay) Stop() {
 
 }
 
-func genPubKey() *pubkey {
-	return nil // FIXME implement
-}
-
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
 	event := newEvent([]byte("test topic"), []byte("test message"), ttl)
@@ -80,8 +76,8 @@ func TestNewEvent(t *testing.T) {
 func TestSubscriptions(t *testing.T) {
 	q := newQuasar(nil, config{
 		defaultEventTTL:  32,
-		filterFreshness:  3,
-		propagationDelay: 1,
+		filterFreshness:  32,
+		propagationDelay: 12,
 		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
@@ -214,8 +210,8 @@ func setupMockNetwork(cfg config, netSize int, connCnt int) []*Quasar {
 func TestEventDelivery(t *testing.T) {
 	cfg := config{
 		defaultEventTTL:  32,
-		filterFreshness:  3,
-		propagationDelay: 1,
+		filterFreshness:  32,
+		propagationDelay: 12,
 		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
@@ -233,12 +229,12 @@ func TestEventDelivery(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*3))
 
 	// create event
 	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
 
-	timeout := time.Duration(cfg.propagationDelay) * time.Second
+	timeout := time.Duration(cfg.propagationDelay) * time.Millisecond
 	select {
 	case <-time.After(timeout):
 		t.Errorf("Timeout event not received!")
@@ -260,8 +256,8 @@ func TestEventTimeout(t *testing.T) {
 
 	cfg := config{
 		defaultEventTTL:  2,
-		filterFreshness:  3,
-		propagationDelay: 1,
+		filterFreshness:  32,
+		propagationDelay: 12,
 		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
@@ -275,11 +271,11 @@ func TestEventTimeout(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*3))
 
 	// create event
 	nodes[1].Publish([]byte("bar"), []byte("bardata"))
-	time.Sleep(time.Duration(cfg.propagationDelay) * time.Second)
+	time.Sleep(time.Duration(cfg.propagationDelay) * time.Millisecond)
 
 	// stop nodes
 	for _, node := range nodes {
@@ -290,8 +286,8 @@ func TestEventTimeout(t *testing.T) {
 func TestExpiredPeerData(t *testing.T) {
 	cfg := config{
 		defaultEventTTL:  2,
-		filterFreshness:  3,
-		propagationDelay: 1,
+		filterFreshness:  32,
+		propagationDelay: 12,
 		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
@@ -306,12 +302,12 @@ func TestExpiredPeerData(t *testing.T) {
 	nodes[1].Start()
 
 	// let filters propagate
-	time.Sleep(time.Second * time.Duration(cfg.propagationDelay*2))
+	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*2))
 
 	nodes[0].Stop() //
 
 	// let filters expire
-	time.Sleep(time.Second * time.Duration(cfg.filterFreshness*2))
+	time.Sleep(time.Millisecond * time.Duration(cfg.filterFreshness*2))
 
 	nodes[1].Stop()
 }
@@ -319,8 +315,8 @@ func TestExpiredPeerData(t *testing.T) {
 func TestNoPeers(t *testing.T) {
 	cfg := config{
 		defaultEventTTL:  2,
-		filterFreshness:  3,
-		propagationDelay: 1,
+		filterFreshness:  32,
+		propagationDelay: 12,
 		historyLimit:     256,
 		historyAccuracy:  0.000001,
 		filtersDepth:     8,
