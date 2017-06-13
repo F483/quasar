@@ -55,20 +55,23 @@ func filterInsertDigest(f []byte, c config, ds ...hash160digest) []byte {
 	return serializeFilter(bf)
 }
 
-func mergeFilters(a []byte, b []byte, n ...[]byte) []byte {
-	resultSize := len(a)
-	resultFilter := make([]byte, resultSize, resultSize)
-	errMsg := "Filter m missmatch: %d != %d"
-	for _, f := range append([][]byte{a, b}, n...) {
-		mustBeTrue(resultSize == len(f), errMsg, resultSize, len(f))
-
-		m := make([]byte, resultSize, resultSize)
-		for i := 0; i < len(m); i++ {
-			m[i] = resultFilter[i] | f[i]
-		}
-		resultFilter = m
+func mergeFilters(fs ...[]byte) []byte {
+	if len(fs) == 0 {
+		return nil
 	}
-	return resultFilter
+	size := len(fs[0])
+	result := make([]byte, size, size)
+	errMsg := "Filter m missmatch: %d != %d"
+	for _, f := range fs {
+		mustBeTrue(size == len(f), errMsg, size, len(f))
+
+		m := make([]byte, size, size)
+		for i := 0; i < len(m); i++ {
+			m[i] = result[i] | f[i]
+		}
+		result = m
+	}
+	return result
 }
 
 func filterContains(f []byte, c config, data []byte) bool {

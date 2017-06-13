@@ -56,6 +56,16 @@ func TestFilters(t *testing.T) {
 	if filterContains(m, cfg, []byte("bam")) != false {
 		t.Errorf("Merged filter contains unexpecded value!")
 	}
+
+	zf := mergeFilters()
+	if zf != nil {
+		t.Errorf("Expected nil result for merging no filters!")
+	}
+
+	z := mergeFilters(filters...)
+	if z == nil {
+		t.Errorf("Expected non nil result for merging all filters!")
+	}
 }
 
 func TestFiltersVariadic(t *testing.T) {
