@@ -39,15 +39,19 @@ func newFilters(c config) [][]byte {
 	return filters
 }
 
-func filterInsert(f []byte, data []byte, c config) []byte {
-	// TODO use variable arguments instead
-	return filterInsertDigest(f, hash160(data), c)
+func filterInsert(f []byte, c config, datas ...[]byte) []byte {
+	ds := make([]hash160digest, len(datas), len(datas))
+	for i, data := range datas {
+		ds[i] = hash160(data)
+	}
+	return filterInsertDigest(f, c, ds...)
 }
 
-func filterInsertDigest(f []byte, d hash160digest, c config) []byte {
-	// TODO use variable arguments instead
+func filterInsertDigest(f []byte, c config, ds ...hash160digest) []byte {
 	bf := deserializeFilter(f, c)
-	bf.Add(d[:])
+	for _, d := range ds {
+		bf.Add(d[:])
+	}
 	return serializeFilter(bf)
 }
 

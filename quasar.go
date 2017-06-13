@@ -86,10 +86,10 @@ func (q *Quasar) sendUpdates() {
 	q.mutex.RLock()
 	filters := newFilters(q.cfg)
 	for digest := range q.subscribers {
-		filters[0] = filterInsertDigest(filters[0], digest, q.cfg)
+		filters[0] = filterInsertDigest(filters[0], q.cfg, digest)
 	}
 	pubkey := q.net.Id()
-	filters[0] = filterInsert(filters[0], pubkey[:], q.cfg)
+	filters[0] = filterInsert(filters[0], q.cfg, pubkey[:])
 	for _, data := range q.peers {
 		if peerDataExpired(data, q.cfg) {
 			continue
