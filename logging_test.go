@@ -23,22 +23,16 @@ func sendLogEntries(l *logger, allSent chan bool) {
 	allSent <- true
 }
 
+func setReceived(b *bool, t *testing.T) {
+	if *b == true {
+		t.Errorf("Unexpected extra log!")
+	}
+	*b = true
+}
+
 func TestLogging(t *testing.T) {
 
-	l := &logger{
-		updatesSent:         make(chan *updateLog),
-		updatesReceived:     make(chan *updateLog),
-		updatesSuccess:      make(chan *updateLog),
-		updatesFail:         make(chan *updateLog),
-		eventsPublished:     make(chan *eventLog),
-		eventsReceived:      make(chan *eventLog),
-		eventsDeliver:       make(chan *eventLog),
-		eventsDropDuplicate: make(chan *eventLog),
-		eventsDropTTL:       make(chan *eventLog),
-		eventsRouteDirect:   make(chan *eventLog),
-		eventsRouteWell:     make(chan *eventLog),
-		eventsRouteRandom:   make(chan *eventLog),
-	}
+	l := newLogger()
 	allSent := make(chan bool)
 	go sendLogEntries(l, allSent)
 
@@ -59,74 +53,40 @@ func TestLogging(t *testing.T) {
 	for !exitLoop {
 		select {
 		case <-l.updatesSent:
-			if rUpdatesSent == true {
-				t.Errorf("Extra updatesSent log!")
-			}
-			rUpdatesSent = true
+			setReceived(&rUpdatesSent, t)
 		case <-l.updatesReceived:
-			if rUpdatesReceived == true {
-				t.Errorf("Extra updatesReceived log!")
-			}
-			rUpdatesReceived = true
+			setReceived(&rUpdatesReceived, t)
 		case <-l.updatesSuccess:
-			if rUpdatesSuccess == true {
-				t.Errorf("Extra updatesSuccess log!")
-			}
-			rUpdatesSuccess = true
+			setReceived(&rUpdatesSuccess, t)
 		case <-l.updatesFail:
-			if rUpdatesFail == true {
-				t.Errorf("Extra updatesFail log!")
-			}
-			rUpdatesFail = true
+			setReceived(&rUpdatesFail, t)
 		case <-l.eventsPublished:
-			if rEventsPublished == true {
-				t.Errorf("Extra eventsPublished log!")
-			}
-			rEventsPublished = true
+			setReceived(&rEventsPublished, t)
 		case <-l.eventsReceived:
-			if rEventsReceived == true {
-				t.Errorf("Extra eventReceived log!")
-			}
-			rEventsReceived = true
+			setReceived(&rEventsReceived, t)
 		case <-l.eventsDeliver:
-			if rEventsDeliver == true {
-				t.Errorf("Extra eventsDeliver log!")
-			}
-			rEventsDeliver = true
+			setReceived(&rEventsDeliver, t)
 		case <-l.eventsDropDuplicate:
-			if rEventsDropDuplicate == true {
-				t.Errorf("Extra eventsDropDuplicate log!")
-			}
-			rEventsDropDuplicate = true
+			setReceived(&rEventsDropDuplicate, t)
 		case <-l.eventsDropTTL:
-			if rEventsDropTTL == true {
-				t.Errorf("Extra eventsDropTTL log!")
-			}
-			rEventsDropTTL = true
+			setReceived(&rEventsDropTTL, t)
 		case <-l.eventsRouteDirect:
-			if rEventsRouteDirect == true {
-				t.Errorf("Extra eventsRouteDirect log!")
-			}
-			rEventsRouteDirect = true
+			setReceived(&rEventsRouteDirect, t)
 		case <-l.eventsRouteWell:
-			if rEventsRouteWell == true {
-				t.Errorf("Extra eventsRouteWell log!")
-			}
-			rEventsRouteWell = true
+			setReceived(&rEventsRouteWell, t)
 		case <-l.eventsRouteRandom:
-			if rEventsRouteRandom == true {
-				t.Errorf("Extra eventsRouteRandom log!")
-			}
-			rEventsRouteRandom = true
+			setReceived(&rEventsRouteRandom, t)
 		case <-allSent:
 			exitLoop = true
 		}
 	}
 
-	if !(rUpdatesSent && rUpdatesReceived && rUpdatesSuccess &&
-		rUpdatesFail && rEventsPublished && rEventsReceived &&
-		rEventsDeliver && rEventsDropDuplicate && rEventsDropTTL &&
-		rEventsRouteDirect && rEventsRouteWell && rEventsRouteRandom) {
+	if !(rUpdatesSent && rUpdatesReceived &&
+		rUpdatesSuccess && rUpdatesFail &&
+		rEventsPublished && rEventsReceived &&
+		rEventsDeliver && rEventsDropDuplicate &&
+		rEventsDropTTL && rEventsRouteDirect &&
+		rEventsRouteWell && rEventsRouteRandom) {
 		t.Errorf("Missing log event!")
 	}
 }

@@ -27,6 +27,23 @@ type logger struct {
 	eventsRouteRandom   chan *eventLog
 }
 
+func newLogger() *logger {
+	return &logger{
+		updatesSent:         make(chan *updateLog),
+		updatesReceived:     make(chan *updateLog),
+		updatesSuccess:      make(chan *updateLog),
+		updatesFail:         make(chan *updateLog),
+		eventsPublished:     make(chan *eventLog),
+		eventsReceived:      make(chan *eventLog),
+		eventsDeliver:       make(chan *eventLog),
+		eventsDropDuplicate: make(chan *eventLog),
+		eventsDropTTL:       make(chan *eventLog),
+		eventsRouteDirect:   make(chan *eventLog),
+		eventsRouteWell:     make(chan *eventLog),
+		eventsRouteRandom:   make(chan *eventLog),
+	}
+}
+
 func (l *logger) updateSent(n *pubkey, i uint32, f []byte, t *pubkey) {
 	if l != nil {
 		u := &peerUpdate{peer: n, index: i, filter: f}
