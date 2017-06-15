@@ -5,12 +5,18 @@ import (
 	"time"
 )
 
-func sendLogEntries(l *logger, allSent chan bool) {
+func sendUpdateLogEntries(l *logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.updateSent(nil, 0, nil, nil)
 	l.updateReceived(nil, nil)
 	l.updateSuccess(nil, nil)
 	l.updateFail(nil, nil)
+	time.Sleep(time.Millisecond * time.Duration(100))
+	allSent <- true
+}
+
+func sendEventLogEntries(l *logger, allSent chan bool) {
+	time.Sleep(time.Millisecond * time.Duration(100))
 	l.eventPublished(nil, nil)
 	l.eventReceived(nil, nil)
 	l.eventDeliver(nil, nil)
@@ -30,63 +36,87 @@ func setReceived(b *bool, t *testing.T) {
 	*b = true
 }
 
-func TestLogging(t *testing.T) {
+func TestUpdateLogging(t *testing.T) {
 
 	l := newLogger()
 	allSent := make(chan bool)
-	go sendLogEntries(l, allSent)
+	go sendUpdateLogEntries(l, allSent)
 
-	rUpdatesSent := false
-	rUpdatesReceived := false
-	rUpdatesSuccess := false
-	rUpdatesFail := false
-	rEventsPublished := false
-	rEventsReceived := false
-	rEventsDeliver := false
-	rEventsDropDuplicate := false
-	rEventsDropTTL := false
-	rEventsRouteDirect := false
-	rEventsRouteWell := false
-	rEventsRouteRandom := false
+	sent := false
+	received := false
+	success := false
+	fail := false
 
 	exitLoop := false
 	for !exitLoop {
 		select {
 		case <-l.updatesSent:
-			setReceived(&rUpdatesSent, t)
+			setReceived(&sent, t)
 		case <-l.updatesReceived:
-			setReceived(&rUpdatesReceived, t)
+			setReceived(&received, t)
 		case <-l.updatesSuccess:
-			setReceived(&rUpdatesSuccess, t)
+			setReceived(&success, t)
 		case <-l.updatesFail:
-			setReceived(&rUpdatesFail, t)
-		case <-l.eventsPublished:
-			setReceived(&rEventsPublished, t)
-		case <-l.eventsReceived:
-			setReceived(&rEventsReceived, t)
-		case <-l.eventsDeliver:
-			setReceived(&rEventsDeliver, t)
-		case <-l.eventsDropDuplicate:
-			setReceived(&rEventsDropDuplicate, t)
-		case <-l.eventsDropTTL:
-			setReceived(&rEventsDropTTL, t)
-		case <-l.eventsRouteDirect:
-			setReceived(&rEventsRouteDirect, t)
-		case <-l.eventsRouteWell:
-			setReceived(&rEventsRouteWell, t)
-		case <-l.eventsRouteRandom:
-			setReceived(&rEventsRouteRandom, t)
+			setReceived(&fail, t)
 		case <-allSent:
 			exitLoop = true
 		}
 	}
 
-	if !(rUpdatesSent && rUpdatesReceived &&
-		rUpdatesSuccess && rUpdatesFail &&
-		rEventsPublished && rEventsReceived &&
-		rEventsDeliver && rEventsDropDuplicate &&
-		rEventsDropTTL && rEventsRouteDirect &&
-		rEventsRouteWell && rEventsRouteRandom) {
+	if !(sent && received && success && fail) {
+		t.Errorf("Missing log event!")
+	}
+}
+
+func collectEventLogs(published *bool, received *bool, deliver *bool,
+	dropDuplicate *bool, dropTTL *bool, routeDirect *bool,
+	routeWell *bool, routeRandom *bool, allSent chan bool,
+	l *logger, t *testing.T) {
+	exitLoop := false
+	for !exitLoop {
+		select {
+		case <-l.eventsPublished:
+			setReceived(published, t)
+		case <-l.eventsReceived:
+			setReceived(received, t)
+		case <-l.eventsDeliver:
+			setReceived(deliver, t)
+		case <-l.eventsDropDuplicate:
+			setReceived(dropDuplicate, t)
+		case <-l.eventsDropTTL:
+			setReceived(dropTTL, t)
+		case <-l.eventsRouteDirect:
+			setReceived(routeDirect, t)
+		case <-l.eventsRouteWell:
+			setReceived(routeWell, t)
+		case <-l.eventsRouteRandom:
+			setReceived(routeRandom, t)
+		case <-allSent:
+			exitLoop = true
+		}
+	}
+}
+
+func TestEventLogging(t *testing.T) {
+
+	l := newLogger()
+	allSent := make(chan bool)
+	go sendEventLogEntries(l, allSent)
+
+	published := false
+	received := false
+	deliver := false
+	dropDuplicate := false
+	dropTTL := false
+	routeDirect := false
+	routeWell := false
+	routeRandom := false
+	collectEventLogs(&published, &received, &deliver, &dropDuplicate,
+		&dropTTL, &routeDirect, &routeWell, &routeRandom, allSent, l, t)
+	if !(published && received &&
+		deliver && dropDuplicate &&
+		dropTTL && routeDirect &&
+		routeWell && routeRandom) {
 		t.Errorf("Missing log event!")
 	}
 }
