@@ -1,5 +1,6 @@
 package quasar
 
+// Config holds the configuration for a quasar node.
 type Config struct {
 	DefaultEventTTL  uint32  // decremented every hop
 	FilterFreshness  uint64  // in milliseconds
@@ -17,7 +18,9 @@ n: 1024 // number of elements
 m: 8192 // filter size = 1k
 k: 6    // number of hash functions = (m / n) log(2)
 */
-var DefaultConfig = Config{
+
+// StandardConfig uses well agreed upon values, only deviate for testing.
+var StandardConfig = Config{
 	DefaultEventTTL:  32,              // 4 missed wells
 	FilterFreshness:  50000,           // 50sec (>2.5 propagation)
 	PropagationDelay: 20000,           // 20sec (~0.5M/min const traffic)

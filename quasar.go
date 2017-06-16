@@ -26,7 +26,7 @@ type Quasar struct {
 
 // NewQuasar create instance with the sane defaults.
 func NewQuasar() *Quasar {
-	return newQuasar(nil, nil, &DefaultConfig)
+	return newQuasar(nil, nil, &StandardConfig)
 }
 
 // NewQuasarCustom create instance with custom logging/setup for testing.
