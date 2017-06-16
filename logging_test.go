@@ -5,7 +5,9 @@ import (
 	"time"
 )
 
-func sendUpdateLogEntries(l *logger, allSent chan bool) {
+// TODO test nil channels
+
+func sendUpdateLogEntries(l *QuasarLog, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.updateSent(nil, 0, nil, nil)
 	l.updateReceived(nil, nil)
@@ -15,7 +17,7 @@ func sendUpdateLogEntries(l *logger, allSent chan bool) {
 	allSent <- true
 }
 
-func sendEventLogEntries(l *logger, allSent chan bool) {
+func sendEventLogEntries(l *QuasarLog, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.eventPublished(nil, nil)
 	l.eventReceived(nil, nil)
@@ -38,7 +40,7 @@ func setReceived(b *bool, t *testing.T) {
 
 func TestUpdateLogging(t *testing.T) {
 
-	l := newLogger()
+	l := NewQuasarLog()
 	allSent := make(chan bool)
 	go sendUpdateLogEntries(l, allSent)
 
@@ -50,13 +52,13 @@ func TestUpdateLogging(t *testing.T) {
 	exitLoop := false
 	for !exitLoop {
 		select {
-		case <-l.updatesSent:
+		case <-l.UpdatesSent:
 			setReceived(&sent, t)
-		case <-l.updatesReceived:
+		case <-l.UpdatesReceived:
 			setReceived(&received, t)
-		case <-l.updatesSuccess:
+		case <-l.UpdatesSuccess:
 			setReceived(&success, t)
-		case <-l.updatesFail:
+		case <-l.UpdatesFail:
 			setReceived(&fail, t)
 		case <-allSent:
 			exitLoop = true
@@ -71,25 +73,25 @@ func TestUpdateLogging(t *testing.T) {
 func collectEventLogs(published *bool, received *bool, deliver *bool,
 	dropDuplicate *bool, dropTTL *bool, routeDirect *bool,
 	routeWell *bool, routeRandom *bool, allSent chan bool,
-	l *logger, t *testing.T) {
+	l *QuasarLog, t *testing.T) {
 	exitLoop := false
 	for !exitLoop {
 		select {
-		case <-l.eventsPublished:
+		case <-l.EventsPublished:
 			setReceived(published, t)
-		case <-l.eventsReceived:
+		case <-l.EventsReceived:
 			setReceived(received, t)
-		case <-l.eventsDeliver:
+		case <-l.EventsDeliver:
 			setReceived(deliver, t)
-		case <-l.eventsDropDuplicate:
+		case <-l.EventsDropDuplicate:
 			setReceived(dropDuplicate, t)
-		case <-l.eventsDropTTL:
+		case <-l.EventsDropTTL:
 			setReceived(dropTTL, t)
-		case <-l.eventsRouteDirect:
+		case <-l.EventsRouteDirect:
 			setReceived(routeDirect, t)
-		case <-l.eventsRouteWell:
+		case <-l.EventsRouteWell:
 			setReceived(routeWell, t)
-		case <-l.eventsRouteRandom:
+		case <-l.EventsRouteRandom:
 			setReceived(routeRandom, t)
 		case <-allSent:
 			exitLoop = true
@@ -99,7 +101,7 @@ func collectEventLogs(published *bool, received *bool, deliver *bool,
 
 func TestEventLogging(t *testing.T) {
 
-	l := newLogger()
+	l := NewQuasarLog()
 	allSent := make(chan bool)
 	go sendEventLogEntries(l, allSent)
 

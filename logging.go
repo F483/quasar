@@ -1,120 +1,147 @@
 package quasar
 
-type updateLog struct {
-	node   *pubkey
+type QuasarUpdateLog struct {
+	node   *Quasar
 	entry  *peerUpdate
 	target *pubkey
 }
 
-type eventLog struct {
-	node   *pubkey
+type QuasarEventLog struct {
+	node   *Quasar
 	entry  *event
 	target *pubkey
 }
 
-type logger struct {
-	updatesSent         chan *updateLog
-	updatesReceived     chan *updateLog
-	updatesSuccess      chan *updateLog // (added to own filters)
-	updatesFail         chan *updateLog // (not from neighbour)
-	eventsPublished     chan *eventLog
-	eventsReceived      chan *eventLog
-	eventsDeliver       chan *eventLog
-	eventsDropDuplicate chan *eventLog
-	eventsDropTTL       chan *eventLog
-	eventsRouteDirect   chan *eventLog
-	eventsRouteWell     chan *eventLog
-	eventsRouteRandom   chan *eventLog
+type QuasarLog struct {
+	UpdatesSent         chan *QuasarUpdateLog
+	UpdatesReceived     chan *QuasarUpdateLog
+	UpdatesSuccess      chan *QuasarUpdateLog // (added to filters)
+	UpdatesFail         chan *QuasarUpdateLog // (not from neighbour)
+	EventsPublished     chan *QuasarEventLog
+	EventsReceived      chan *QuasarEventLog
+	EventsDeliver       chan *QuasarEventLog
+	EventsDropDuplicate chan *QuasarEventLog
+	EventsDropTTL       chan *QuasarEventLog
+	EventsRouteDirect   chan *QuasarEventLog
+	EventsRouteWell     chan *QuasarEventLog
+	EventsRouteRandom   chan *QuasarEventLog
 }
 
-func newLogger() *logger {
-	return &logger{
-		updatesSent:         make(chan *updateLog),
-		updatesReceived:     make(chan *updateLog),
-		updatesSuccess:      make(chan *updateLog),
-		updatesFail:         make(chan *updateLog),
-		eventsPublished:     make(chan *eventLog),
-		eventsReceived:      make(chan *eventLog),
-		eventsDeliver:       make(chan *eventLog),
-		eventsDropDuplicate: make(chan *eventLog),
-		eventsDropTTL:       make(chan *eventLog),
-		eventsRouteDirect:   make(chan *eventLog),
-		eventsRouteWell:     make(chan *eventLog),
-		eventsRouteRandom:   make(chan *eventLog),
+func NewQuasarLog() *QuasarLog {
+	return &QuasarLog{
+		UpdatesSent:         make(chan *QuasarUpdateLog),
+		UpdatesReceived:     make(chan *QuasarUpdateLog),
+		UpdatesSuccess:      make(chan *QuasarUpdateLog),
+		UpdatesFail:         make(chan *QuasarUpdateLog),
+		EventsPublished:     make(chan *QuasarEventLog),
+		EventsReceived:      make(chan *QuasarEventLog),
+		EventsDeliver:       make(chan *QuasarEventLog),
+		EventsDropDuplicate: make(chan *QuasarEventLog),
+		EventsDropTTL:       make(chan *QuasarEventLog),
+		EventsRouteDirect:   make(chan *QuasarEventLog),
+		EventsRouteWell:     make(chan *QuasarEventLog),
+		EventsRouteRandom:   make(chan *QuasarEventLog),
 	}
 }
 
-func (l *logger) updateSent(n *pubkey, i uint32, f []byte, t *pubkey) {
-	if l != nil {
-		u := &peerUpdate{peer: n, index: i, filter: f}
-		l.updatesSent <- &updateLog{node: n, entry: u, target: t}
+func (l *QuasarLog) updateSent(n *Quasar, i uint32, f []byte, t *pubkey) {
+	if l != nil && l.UpdatesSent != nil {
+		var id *pubkey = nil
+		if n != nil {
+			idv := n.net.Id()
+			id = &idv
+		}
+		u := &peerUpdate{peer: id, index: i, filter: f}
+		l.UpdatesSent <- &QuasarUpdateLog{
+			node: n, entry: u, target: t,
+		}
 	}
 }
 
-func (l *logger) updateReceived(n *pubkey, u *peerUpdate) {
-	if l != nil {
-		l.updatesReceived <- &updateLog{
+func (l *QuasarLog) updateReceived(n *Quasar, u *peerUpdate) {
+	if l != nil && l.UpdatesReceived != nil {
+		l.UpdatesReceived <- &QuasarUpdateLog{
 			node: n, entry: u, target: nil,
 		}
 	}
 }
 
-func (l *logger) updateSuccess(n *pubkey, u *peerUpdate) {
-	if l != nil {
-		l.updatesSuccess <- &updateLog{node: n, entry: u, target: nil}
+func (l *QuasarLog) updateSuccess(n *Quasar, u *peerUpdate) {
+	if l != nil && l.UpdatesSuccess != nil {
+		l.UpdatesSuccess <- &QuasarUpdateLog{
+			node: n, entry: u, target: nil,
+		}
 	}
 }
 
-func (l *logger) updateFail(n *pubkey, u *peerUpdate) {
-	if l != nil {
-		l.updatesFail <- &updateLog{node: n, entry: u, target: nil}
+func (l *QuasarLog) updateFail(n *Quasar, u *peerUpdate) {
+	if l != nil && l.UpdatesFail != nil {
+		l.UpdatesFail <- &QuasarUpdateLog{
+			node: n, entry: u, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventPublished(n *pubkey, e *event) {
-	if l != nil {
-		l.eventsPublished <- &eventLog{node: n, entry: e, target: nil}
+func (l *QuasarLog) eventPublished(n *Quasar, e *event) {
+	if l != nil && l.EventsPublished != nil {
+		l.EventsPublished <- &QuasarEventLog{
+			node: n, entry: e, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventReceived(n *pubkey, e *event) {
-	if l != nil {
-		l.eventsReceived <- &eventLog{node: n, entry: e, target: nil}
+func (l *QuasarLog) eventReceived(n *Quasar, e *event) {
+	if l != nil && l.EventsReceived != nil {
+		l.EventsReceived <- &QuasarEventLog{
+			node: n, entry: e, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventDeliver(n *pubkey, e *event) {
-	if l != nil {
-		l.eventsDeliver <- &eventLog{node: n, entry: e, target: nil}
+func (l *QuasarLog) eventDeliver(n *Quasar, e *event) {
+	if l != nil && l.EventsDeliver != nil {
+		l.EventsDeliver <- &QuasarEventLog{
+			node: n, entry: e, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventDropDuplicate(n *pubkey, e *event) {
-	if l != nil {
-		l.eventsDropDuplicate <- &eventLog{node: n, entry: e, target: nil}
+func (l *QuasarLog) eventDropDuplicate(n *Quasar, e *event) {
+	if l != nil && l.EventsDropDuplicate != nil {
+		l.EventsDropDuplicate <- &QuasarEventLog{
+			node: n, entry: e, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventDropTTL(n *pubkey, e *event) {
-	if l != nil {
-		l.eventsDropTTL <- &eventLog{node: n, entry: e, target: nil}
+func (l *QuasarLog) eventDropTTL(n *Quasar, e *event) {
+	if l != nil && l.EventsDropTTL != nil {
+		l.EventsDropTTL <- &QuasarEventLog{
+			node: n, entry: e, target: nil,
+		}
 	}
 }
 
-func (l *logger) eventRouteDirect(n *pubkey, e *event, t *pubkey) {
-	if l != nil {
-		l.eventsRouteDirect <- &eventLog{node: n, entry: e, target: t}
+func (l *QuasarLog) eventRouteDirect(n *Quasar, e *event, t *pubkey) {
+	if l != nil && l.EventsRouteDirect != nil {
+		l.EventsRouteDirect <- &QuasarEventLog{
+			node: n, entry: e, target: t,
+		}
 	}
 }
 
-func (l *logger) eventRouteWell(n *pubkey, e *event, t *pubkey) {
-	if l != nil {
-		l.eventsRouteWell <- &eventLog{node: n, entry: e, target: t}
+func (l *QuasarLog) eventRouteWell(n *Quasar, e *event, t *pubkey) {
+	if l != nil && l.EventsRouteWell != nil {
+		l.EventsRouteWell <- &QuasarEventLog{
+			node: n, entry: e, target: t,
+		}
 	}
 }
 
-func (l *logger) eventRouteRandom(n *pubkey, e *event, t *pubkey) {
-	if l != nil {
-		l.eventsRouteRandom <- &eventLog{node: n, entry: e, target: t}
+func (l *QuasarLog) eventRouteRandom(n *Quasar, e *event, t *pubkey) {
+	if l != nil && l.EventsRouteRandom != nil {
+		l.EventsRouteRandom <- &QuasarEventLog{
+			node: n, entry: e, target: t,
+		}
 	}
 }

@@ -16,7 +16,7 @@ type Quasar struct {
 	topics            map[hash160digest][]byte
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
-	log               *logger
+	log               *QuasarLog
 	history           dejavu.DejaVu // memory of past events
 	cfg               config
 	stopDispatcher    chan bool
@@ -28,18 +28,19 @@ type Quasar struct {
 func NewQuasar() *Quasar {
 	// FIXME enable passing of nodeId/pubkey
 	// FIXME add default network
-	return newQuasar(nil, defaultConfig)
+	// FIXME add default logger
+	return newQuasar(nil, nil, defaultConfig)
 }
 
-func newQuasar(net networkOverlay, c config) *Quasar {
+func newQuasar(n networkOverlay, l *QuasarLog, c config) *Quasar {
 	d := dejavu.NewProbabilistic(c.historyLimit, c.historyAccuracy)
 	return &Quasar{
-		net:               net,
+		net:               n,
 		subscribers:       make(map[hash160digest][]chan []byte),
 		topics:            make(map[hash160digest][]byte),
 		mutex:             new(sync.RWMutex),
 		peers:             make(map[pubkey]*peerData),
-		log:               nil, // TODO get from args
+		log:               l,
 		history:           d,
 		cfg:               c,
 		stopDispatcher:    nil, // set on Start() call
@@ -58,10 +59,9 @@ func (q *Quasar) isConnected(peerId *pubkey) bool {
 }
 
 func (q *Quasar) processUpdate(u *peerUpdate) {
-	id := q.net.Id()
-	go q.log.updateReceived(&id, u)
+	go q.log.updateReceived(q, u)
 	if q.isConnected(u.peer) == false {
-		go q.log.updateFail(&id, u)
+		go q.log.updateFail(q, u)
 		return // ignore to prevent memory attack
 	}
 
@@ -81,15 +81,14 @@ func (q *Quasar) processUpdate(u *peerUpdate) {
 	data.filters[u.index] = u.filter
 	data.timestamps[u.index] = makePeerTimestamp()
 	q.mutex.Unlock()
-	go q.log.updateSuccess(&id, u)
+	go q.log.updateSuccess(q, u)
 }
 
 // Publish a message on the network for given topic.
 func (q *Quasar) Publish(topic []byte, message []byte) {
 	// TODO validate input
-	id := q.net.Id()
 	event := newEvent(topic, message, q.cfg.defaultEventTTL)
-	go q.log.eventPublished(&id, event)
+	go q.log.eventPublished(q, event)
 	go q.route(event)
 }
 
@@ -124,7 +123,7 @@ func (q *Quasar) sendUpdates() {
 		for i := 0; uint32(i) < (q.cfg.filtersDepth - 1); i++ {
 			// top filter never sent as not used by peers
 			go q.net.SendUpdate(&id, uint32(i), filters[i])
-			go q.log.updateSent(&pubkey, uint32(i), filters[i], &id)
+			go q.log.updateSent(q, uint32(i), filters[i], &id)
 		}
 	}
 	q.mutex.RUnlock()
@@ -135,24 +134,24 @@ func (q *Quasar) route(e *event) {
 	q.mutex.RLock()
 	id := q.net.Id()
 	if q.isDuplicate(e) {
-		go q.log.eventDropDuplicate(&id, e)
+		go q.log.eventDropDuplicate(q, e)
 		q.mutex.RUnlock()
 		return
 	}
 	if receivers, ok := q.subscribers[*e.topicDigest]; ok {
-		q.log.eventDeliver(&id, e)
+		q.log.eventDeliver(q, e)
 		q.deliver(receivers, e)
 		e.publishers = append(e.publishers, id)
 		for _, peerId := range q.net.ConnectedPeers() {
 			go q.net.SendEvent(&peerId, e)
-			go q.log.eventRouteDirect(&id, e, &peerId)
+			go q.log.eventRouteDirect(q, e, &peerId)
 		}
 		q.mutex.RUnlock()
 		return
 	}
 	e.ttl -= 1
 	if e.ttl == 0 {
-		go q.log.eventDropTTL(&id, e)
+		go q.log.eventDropTTL(q, e)
 		q.mutex.RUnlock()
 		return
 	}
@@ -168,7 +167,7 @@ func (q *Quasar) route(e *event) {
 				}
 				if !negRt {
 					go q.net.SendEvent(&peerId, e)
-					go q.log.eventRouteWell(&id, e, &peerId)
+					go q.log.eventRouteWell(q, e, &peerId)
 					q.mutex.RUnlock()
 					return
 				}
@@ -178,7 +177,7 @@ func (q *Quasar) route(e *event) {
 	peerId := q.randomPeer()
 	if peerId != nil {
 		go q.net.SendEvent(peerId, e)
-		go q.log.eventRouteRandom(&id, e, peerId)
+		go q.log.eventRouteRandom(q, e, peerId)
 	}
 	q.mutex.RUnlock()
 }
@@ -201,8 +200,7 @@ func (q *Quasar) dispatchInput() {
 			}
 		case event := <-q.net.ReceivedEventChannel():
 			if validEvent(event) {
-				id := q.net.Id()
-				go q.log.eventReceived(&id, event)
+				go q.log.eventReceived(q, event)
 				go q.route(event)
 			}
 		case <-q.stopDispatcher:

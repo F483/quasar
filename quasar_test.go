@@ -1,57 +1,10 @@
 package quasar
 
 import (
-	"math/rand"
 	"reflect"
 	"testing"
 	"time"
 )
-
-// FIXME only mock until network layer implemented
-type MockNetwork struct {
-	peers          []*pubkey
-	connections    map[pubkey][]pubkey
-	updateChannels map[pubkey]chan *peerUpdate
-	eventChannels  map[pubkey]chan *event
-}
-
-type MockOverlay struct {
-	peer pubkey
-	net  *MockNetwork
-}
-
-func (mqt *MockOverlay) Id() pubkey {
-	return mqt.peer
-}
-
-func (mqt *MockOverlay) ConnectedPeers() []pubkey {
-	return mqt.net.connections[mqt.peer]
-}
-
-func (mqt *MockOverlay) ReceivedEventChannel() chan *event {
-	return mqt.net.eventChannels[mqt.peer]
-}
-
-func (mqt *MockOverlay) ReceivedUpdateChannel() chan *peerUpdate {
-	return mqt.net.updateChannels[mqt.peer]
-}
-
-func (mqt *MockOverlay) SendEvent(id *pubkey, e *event) {
-	mqt.net.eventChannels[*id] <- e
-}
-
-func (mqt *MockOverlay) SendUpdate(id *pubkey, i uint32, filter []byte) {
-	u := &peerUpdate{peer: &mqt.peer, index: i, filter: filter}
-	mqt.net.updateChannels[*id] <- u
-}
-
-func (mqt *MockOverlay) Start() {
-
-}
-
-func (mqt *MockOverlay) Stop() {
-
-}
 
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
@@ -74,7 +27,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := newQuasar(nil, config{
+	q := newQuasar(nil, nil, config{
 		defaultEventTTL:  32,
 		filterFreshness:  32,
 		propagationDelay: 12,
@@ -169,44 +122,6 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 	return true
 }
 
-func setupMockNetwork(cfg config, netSize int, connCnt int) []*Quasar {
-
-	net := &MockNetwork{
-		peers:          make([]*pubkey, netSize, netSize),
-		connections:    make(map[pubkey][]pubkey),
-		updateChannels: make(map[pubkey]chan *peerUpdate),
-		eventChannels:  make(map[pubkey]chan *event),
-	}
-
-	// create peers and channels
-	for i := 0; i < netSize; i++ {
-		var peerId pubkey
-		rand.Read(peerId[:])
-		net.peers[i] = &peerId
-		net.updateChannels[peerId] = make(chan *peerUpdate)
-		net.eventChannels[peerId] = make(chan *event)
-	}
-
-	// create connections
-	for i := 0; i < netSize; i++ {
-		peerId := net.peers[i]
-		net.connections[*peerId] = make([]pubkey, connCnt, connCnt)
-		for j := 0; j < connCnt; j++ {
-			neighbour := net.peers[(i+j)%connCnt]
-			net.connections[*peerId][j] = *neighbour
-		}
-	}
-
-	// create quasar nodes
-	nodes := make([]*Quasar, netSize, netSize)
-	for i := 0; i < netSize; i++ {
-		no := MockOverlay{peer: *net.peers[i], net: net}
-		nodes[i] = newQuasar(&no, cfg)
-	}
-
-	return nodes
-}
-
 func TestEventDelivery(t *testing.T) {
 	cfg := config{
 		defaultEventTTL:  32,
@@ -219,7 +134,7 @@ func TestEventDelivery(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := setupMockNetwork(cfg, 20, 20)
+	nodes := MockQuasarNetwork(cfg, 20, 20)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -265,7 +180,7 @@ func TestEventTimeout(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := setupMockNetwork(cfg, 20, 20)
+	nodes := MockQuasarNetwork(cfg, 20, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
@@ -295,7 +210,7 @@ func TestExpiredPeerData(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := setupMockNetwork(cfg, 2, 2)
+	nodes := MockQuasarNetwork(cfg, 2, 2)
 
 	// start nodes and wait for filters to propagate
 	nodes[0].Start()
@@ -324,7 +239,7 @@ func TestNoPeers(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := setupMockNetwork(cfg, 1, 0)
+	nodes := MockQuasarNetwork(cfg, 1, 0)
 	nodes[0].Start()
 	nodes[0].Publish([]byte("bar"), []byte("bardata"))
 	nodes[0].Stop()
