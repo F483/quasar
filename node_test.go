@@ -27,7 +27,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := newQuasar(nil, nil, &Config{
+	n := newNode(nil, nil, &Config{
 		DefaultEventTTL:  32,
 		FilterFreshness:  32,
 		PropagationDelay: 12,
@@ -39,65 +39,65 @@ func TestSubscriptions(t *testing.T) {
 	})
 
 	a := make(chan []byte)
-	q.Subscribe([]byte("a"), a)
-	subs := q.Subscriptions()
+	n.Subscribe([]byte("a"), a)
+	subs := n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	b1 := make(chan []byte)
-	q.Subscribe([]byte("b"), b1)
-	subs = q.Subscriptions()
+	n.Subscribe([]byte("b"), b1)
+	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	b2 := make(chan []byte)
-	q.Subscribe([]byte("b"), b2)
-	subs = q.Subscriptions()
+	n.Subscribe([]byte("b"), b2)
+	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	c1 := make(chan []byte)
-	q.Subscribe([]byte("c"), c1)
-	subs = q.Subscriptions()
+	n.Subscribe([]byte("c"), c1)
+	subs = n.Subscriptions()
 	expectedSubs := [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	c2 := make(chan []byte)
-	q.Subscribe([]byte("c"), c2)
-	subs = q.Subscriptions()
+	n.Subscribe([]byte("c"), c2)
+	subs = n.Subscriptions()
 	expectedSubs = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	// test clears all if no receiver provided
-	q.Unsubscribe([]byte("c"), nil)
-	subs = q.Subscriptions()
+	n.Unsubscribe([]byte("c"), nil)
+	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
 	// only clears specific receiver
-	if len(q.Subscribers([]byte("b"))) != 2 {
+	if len(n.Subscribers([]byte("b"))) != 2 {
 		t.Errorf("Incorrect subscribers!")
 	}
-	q.Unsubscribe([]byte("b"), b1)
-	subs = q.Subscriptions()
+	n.Unsubscribe([]byte("b"), b1)
+	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
-	if len(q.Subscribers([]byte("b"))) != 1 {
+	if len(n.Subscribers([]byte("b"))) != 1 {
 		t.Errorf("Incorrect subscribers!")
 	}
 
 	// clears key when last receiver removed
-	q.Unsubscribe([]byte("b"), b2)
-	subs = q.Subscriptions()
+	n.Unsubscribe([]byte("b"), b2)
+	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
