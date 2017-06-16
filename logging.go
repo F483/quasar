@@ -50,7 +50,7 @@ func NewQuasarLog() *QuasarLog {
 
 func (l *QuasarLog) updateSent(n *Quasar, i uint32, f []byte, t *pubkey) {
 	if l != nil && l.UpdatesSent != nil {
-		var id *pubkey = nil
+		var id *pubkey
 		if n != nil {
 			idv := n.net.Id()
 			id = &idv
