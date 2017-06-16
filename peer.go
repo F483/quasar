@@ -11,10 +11,10 @@ func makePeerTimestamp() uint64 {
 	return uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
 }
 
-func peerDataExpired(p *peerData, c config) bool {
+func peerDataExpired(p *peerData, c *Config) bool {
 	now := makePeerTimestamp()
 	for _, timestamp := range p.timestamps {
-		if timestamp >= (now - c.filterFreshness) {
+		if timestamp >= (now - c.FilterFreshness) {
 			return false
 		}
 	}
@@ -27,10 +27,10 @@ type peerUpdate struct {
 	filter []byte
 }
 
-func validUpdate(u *peerUpdate, c config) bool {
-	return u != nil && u.peer != nil &&
-		u.index < (c.filtersDepth-1) && // top filter never propagated
-		uint64(len(u.filter)) == (c.filtersM/8)
+func validUpdate(u *peerUpdate, c *Config) bool {
+	return u != nil && c != nil && u.peer != nil &&
+		u.index < (c.FiltersDepth-1) && // top filter never propagated
+		uint64(len(u.filter)) == (c.FiltersM/8)
 }
 
 // func serializePeerUpdate(u *peerUpdate) []byte {

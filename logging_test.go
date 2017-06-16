@@ -7,7 +7,7 @@ import (
 
 // TODO test nil channels
 
-func sendUpdateLogEntries(l *QuasarLog, allSent chan bool) {
+func sendUpdateLogEntries(l *Logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.updateSent(nil, 0, nil, nil)
 	l.updateReceived(nil, nil)
@@ -17,7 +17,7 @@ func sendUpdateLogEntries(l *QuasarLog, allSent chan bool) {
 	allSent <- true
 }
 
-func sendEventLogEntries(l *QuasarLog, allSent chan bool) {
+func sendEventLogEntries(l *Logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.eventPublished(nil, nil)
 	l.eventReceived(nil, nil)
@@ -40,7 +40,7 @@ func setReceived(b *bool, t *testing.T) {
 
 func TestUpdateLogging(t *testing.T) {
 
-	l := NewQuasarLog()
+	l := NewLogger()
 	allSent := make(chan bool)
 	go sendUpdateLogEntries(l, allSent)
 
@@ -73,7 +73,7 @@ func TestUpdateLogging(t *testing.T) {
 func collectEventLogs(published *bool, received *bool, deliver *bool,
 	dropDuplicate *bool, dropTTL *bool, routeDirect *bool,
 	routeWell *bool, routeRandom *bool, allSent chan bool,
-	l *QuasarLog, t *testing.T) {
+	l *Logger, t *testing.T) {
 	exitLoop := false
 	for !exitLoop {
 		select {
@@ -101,7 +101,7 @@ func collectEventLogs(published *bool, received *bool, deliver *bool,
 
 func TestEventLogging(t *testing.T) {
 
-	l := NewQuasarLog()
+	l := NewLogger()
 	allSent := make(chan bool)
 	go sendEventLogEntries(l, allSent)
 

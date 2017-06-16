@@ -3,19 +3,19 @@ package quasar
 import "testing"
 
 func TestFilters(t *testing.T) {
-	cfg := config{
-		defaultEventTTL:  1024,
-		filterFreshness:  180,
-		propagationDelay: 60000,
-		historyLimit:     65536,
-		historyAccuracy:  0.000001,
-		filtersDepth:     1024,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  1024,
+		FilterFreshness:  180,
+		PropagationDelay: 60000,
+		HistoryLimit:     65536,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     1024,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
 	filters := newFilters(cfg)
-	if uint32(len(filters)) != cfg.filtersDepth {
+	if uint32(len(filters)) != cfg.FiltersDepth {
 		t.Errorf("Incorrect filter depth!")
 	}
 
@@ -69,15 +69,15 @@ func TestFilters(t *testing.T) {
 }
 
 func TestFiltersVariadic(t *testing.T) {
-	cfg := config{
-		defaultEventTTL:  1024,
-		filterFreshness:  180,
-		propagationDelay: 60000,
-		historyLimit:     65536,
-		historyAccuracy:  0.000001,
-		filtersDepth:     1024,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  1024,
+		FilterFreshness:  180,
+		PropagationDelay: 60000,
+		HistoryLimit:     65536,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     1024,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
 	filters := newFilters(cfg)

@@ -12,9 +12,9 @@ func serializeFilter(f *bloom.BloomFilter) []byte {
 	return data[24:] // remove known header
 }
 
-func deserializeFilter(d []byte, c config) *bloom.BloomFilter {
-	m := c.filtersM
-	k := c.filtersK
+func deserializeFilter(d []byte, c *Config) *bloom.BloomFilter {
+	m := c.FiltersM
+	k := c.FiltersK
 
 	// recreate header
 	var buf bytes.Buffer
@@ -30,16 +30,16 @@ func deserializeFilter(d []byte, c config) *bloom.BloomFilter {
 	return f
 }
 
-func newFilters(c config) [][]byte {
-	m := c.filtersM
+func newFilters(c *Config) [][]byte {
+	m := c.FiltersM
 	filters := make([][]byte, 0)
-	for i := 0; uint32(i) < c.filtersDepth; i++ {
+	for i := 0; uint32(i) < c.FiltersDepth; i++ {
 		filters = append(filters, make([]byte, m/8, m/8))
 	}
 	return filters
 }
 
-func filterInsert(f []byte, c config, datas ...[]byte) []byte {
+func filterInsert(f []byte, c *Config, datas ...[]byte) []byte {
 	ds := make([]hash160digest, len(datas), len(datas))
 	for i, data := range datas {
 		ds[i] = hash160(data)
@@ -47,7 +47,7 @@ func filterInsert(f []byte, c config, datas ...[]byte) []byte {
 	return filterInsertDigest(f, c, ds...)
 }
 
-func filterInsertDigest(f []byte, c config, ds ...hash160digest) []byte {
+func filterInsertDigest(f []byte, c *Config, ds ...hash160digest) []byte {
 	bf := deserializeFilter(f, c)
 	for _, d := range ds {
 		bf.Add(d[:])
@@ -74,11 +74,11 @@ func mergeFilters(fs ...[]byte) []byte {
 	return result
 }
 
-func filterContains(f []byte, c config, data []byte) bool {
+func filterContains(f []byte, c *Config, data []byte) bool {
 	return filterContainsDigest(f, c, hash160(data))
 }
 
-func filterContainsDigest(f []byte, c config, d hash160digest) bool {
+func filterContainsDigest(f []byte, c *Config, d hash160digest) bool {
 	bf := deserializeFilter(f, c)
 	return bf.Test(d[:])
 }

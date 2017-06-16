@@ -27,15 +27,15 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	q := newQuasar(nil, nil, config{
-		defaultEventTTL:  32,
-		filterFreshness:  32,
-		propagationDelay: 12,
-		historyLimit:     256,
-		historyAccuracy:  0.000001,
-		filtersDepth:     8,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	q := newQuasar(nil, nil, &Config{
+		DefaultEventTTL:  32,
+		FilterFreshness:  32,
+		PropagationDelay: 12,
+		HistoryLimit:     256,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     8,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	})
 
 	a := make(chan []byte)
@@ -123,18 +123,18 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 }
 
 func TestEventDelivery(t *testing.T) {
-	cfg := config{
-		defaultEventTTL:  32,
-		filterFreshness:  32,
-		propagationDelay: 12,
-		historyLimit:     256,
-		historyAccuracy:  0.000001,
-		filtersDepth:     8,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  32,
+		FilterFreshness:  32,
+		PropagationDelay: 12,
+		HistoryLimit:     256,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     8,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
-	nodes := QuasarMockNetwork(nil, cfg, 20, 20)
+	nodes := NewMockNetwork(nil, cfg, 20, 20)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -144,12 +144,12 @@ func TestEventDelivery(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
 
 	// create event
 	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
 
-	timeout := time.Duration(cfg.propagationDelay) * time.Millisecond
+	timeout := time.Duration(cfg.PropagationDelay) * time.Millisecond
 	select {
 	case <-time.After(timeout):
 		t.Errorf("Timeout event not received!")
@@ -169,28 +169,28 @@ func TestEventTimeout(t *testing.T) {
 	// get coverage for dropping ttl = 0 events
 	// may be dropped by history with few nodes
 
-	cfg := config{
-		defaultEventTTL:  2,
-		filterFreshness:  32,
-		propagationDelay: 12,
-		historyLimit:     256,
-		historyAccuracy:  0.000001,
-		filtersDepth:     8,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  2,
+		FilterFreshness:  32,
+		PropagationDelay: 12,
+		HistoryLimit:     256,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     8,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
-	nodes := QuasarMockNetwork(nil, cfg, 20, 20)
+	nodes := NewMockNetwork(nil, cfg, 20, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
 
 	// create event
 	nodes[1].Publish([]byte("bar"), []byte("bardata"))
-	time.Sleep(time.Duration(cfg.propagationDelay) * time.Millisecond)
+	time.Sleep(time.Duration(cfg.PropagationDelay) * time.Millisecond)
 
 	// stop nodes
 	for _, node := range nodes {
@@ -199,47 +199,47 @@ func TestEventTimeout(t *testing.T) {
 }
 
 func TestExpiredPeerData(t *testing.T) {
-	cfg := config{
-		defaultEventTTL:  2,
-		filterFreshness:  32,
-		propagationDelay: 12,
-		historyLimit:     256,
-		historyAccuracy:  0.000001,
-		filtersDepth:     8,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  2,
+		FilterFreshness:  32,
+		PropagationDelay: 12,
+		HistoryLimit:     256,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     8,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
-	nodes := QuasarMockNetwork(nil, cfg, 2, 2)
+	nodes := NewMockNetwork(nil, cfg, 2, 2)
 
 	// start nodes and wait for filters to propagate
 	nodes[0].Start()
 	nodes[1].Start()
 
 	// let filters propagate
-	time.Sleep(time.Millisecond * time.Duration(cfg.propagationDelay*2))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*2))
 
 	nodes[0].Stop()
 
 	// let filters expire
-	time.Sleep(time.Millisecond * time.Duration(cfg.filterFreshness*2))
+	time.Sleep(time.Millisecond * time.Duration(cfg.FilterFreshness*2))
 
 	nodes[1].Stop()
 }
 
 func TestNoPeers(t *testing.T) {
-	cfg := config{
-		defaultEventTTL:  2,
-		filterFreshness:  32,
-		propagationDelay: 12,
-		historyLimit:     256,
-		historyAccuracy:  0.000001,
-		filtersDepth:     8,
-		filtersM:         8192, // m 1k
-		filtersK:         6,    // hashes
+	cfg := &Config{
+		DefaultEventTTL:  2,
+		FilterFreshness:  32,
+		PropagationDelay: 12,
+		HistoryLimit:     256,
+		HistoryAccuracy:  0.000001,
+		FiltersDepth:     8,
+		FiltersM:         8192, // m 1k
+		FiltersK:         6,    // hashes
 	}
 
-	nodes := QuasarMockNetwork(nil, cfg, 1, 0)
+	nodes := NewMockNetwork(nil, cfg, 1, 0)
 	nodes[0].Start()
 	nodes[0].Publish([]byte("bar"), []byte("bardata"))
 	nodes[0].Stop()

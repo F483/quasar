@@ -47,10 +47,10 @@ func (mo *mockOverlay) Stop() {
 
 }
 
-// QuasarMockNetwork creates mock network that uses the quasar protocol
-// but with a mock overlay network. Can be used to test
+// NewMockNetwork creates network that uses the quasar protocol  but
+// with a mock overlay network. Can be used to test
 // subscriptions/events/delivery, but not network churn or peer discovery.
-func QuasarMockNetwork(l *QuasarLog, cfg config,
+func NewMockNetwork(l *Logger, cfg *Config,
 	size int, peerCnt int) []*Quasar {
 
 	net := &mockNetwork{

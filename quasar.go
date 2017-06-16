@@ -16,24 +16,29 @@ type Quasar struct {
 	topics            map[hash160digest][]byte
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
-	log               *QuasarLog
+	log               *Logger
 	history           dejavu.DejaVu // memory of past events
-	cfg               config
+	cfg               *Config
 	stopDispatcher    chan bool
 	stopPropagation   chan bool
 	stopExpiredPeerGC chan bool
 }
 
-// NewQuasar create new instance with the sane defaults.
-// Optionally supply logger to monitor internals.
-func NewQuasar(l *QuasarLog) *Quasar {
-	// FIXME enable passing of nodeId/pubkey
-	// FIXME add default network
-	return newQuasar(nil, l, defaultConfig)
+// NewQuasar create instance with the sane defaults.
+func NewQuasar() *Quasar {
+	return newQuasar(nil, nil, &DefaultConfig)
 }
 
-func newQuasar(n networkOverlay, l *QuasarLog, c config) *Quasar {
-	d := dejavu.NewProbabilistic(c.historyLimit, c.historyAccuracy)
+// NewQuasarCustom create instance with custom logging/setup for testing.
+func NewQuasarCustom(l *Logger, c *Config) *Quasar {
+	// FIXME enable passing of nodeId/pubkey
+	// FIXME add default network
+	return newQuasar(nil, l, c)
+}
+
+func newQuasar(n networkOverlay, l *Logger, c *Config) *Quasar {
+	// TODO set default config if nil provided
+	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Quasar{
 		net:               n,
 		subscribers:       make(map[hash160digest][]chan []byte),
@@ -69,7 +74,7 @@ func (q *Quasar) processUpdate(u *peerUpdate) {
 	data, ok := q.peers[*u.peer]
 
 	if !ok { // init if doesnt exist
-		depth := q.cfg.filtersDepth
+		depth := q.cfg.FiltersDepth
 		data = &peerData{
 			filters:    newFilters(q.cfg),
 			timestamps: make([]uint64, depth, depth),
@@ -87,7 +92,7 @@ func (q *Quasar) processUpdate(u *peerUpdate) {
 // Publish a message on the network for given topic.
 func (q *Quasar) Publish(topic []byte, message []byte) {
 	// TODO validate input
-	event := newEvent(topic, message, q.cfg.defaultEventTTL)
+	event := newEvent(topic, message, q.cfg.DefaultEventTTL)
 	go q.log.eventPublished(q, event)
 	go q.route(event)
 }
@@ -115,12 +120,12 @@ func (q *Quasar) sendUpdates() {
 		if peerDataExpired(data, q.cfg) {
 			continue
 		}
-		for i := 1; uint32(i) < q.cfg.filtersDepth; i++ {
+		for i := 1; uint32(i) < q.cfg.FiltersDepth; i++ {
 			filters[i] = mergeFilters(filters[i], data.filters[i-1])
 		}
 	}
 	for _, id := range q.net.ConnectedPeers() {
-		for i := 0; uint32(i) < (q.cfg.filtersDepth - 1); i++ {
+		for i := 0; uint32(i) < (q.cfg.FiltersDepth - 1); i++ {
 			// top filter never sent as not used by peers
 			go q.net.SendUpdate(&id, uint32(i), filters[i])
 			go q.log.updateSent(q, uint32(i), filters[i], &id)
@@ -155,7 +160,7 @@ func (q *Quasar) route(e *event) {
 		q.mutex.RUnlock()
 		return
 	}
-	for i := 0; uint32(i) < q.cfg.filtersDepth; i++ {
+	for i := 0; uint32(i) < q.cfg.FiltersDepth; i++ {
 		for peerId, data := range q.peers {
 			f := data.filters[i]
 			if filterContainsDigest(f, q.cfg, *e.topicDigest) {
@@ -236,7 +241,7 @@ func (q *Quasar) expiredPeerGC() {
 }
 
 func (q *Quasar) propagateFilters() {
-	delay := time.Duration(q.cfg.propagationDelay) * time.Millisecond
+	delay := time.Duration(q.cfg.PropagationDelay) * time.Millisecond
 	for {
 		select {
 		case <-time.After(delay):
