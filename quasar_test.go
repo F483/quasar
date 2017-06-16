@@ -134,7 +134,7 @@ func TestEventDelivery(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := MockQuasarNetwork(cfg, 20, 20)
+	nodes := QuasarMockNetwork(nil, cfg, 20, 20)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -180,7 +180,7 @@ func TestEventTimeout(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := MockQuasarNetwork(cfg, 20, 20)
+	nodes := QuasarMockNetwork(nil, cfg, 20, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
@@ -210,7 +210,7 @@ func TestExpiredPeerData(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := MockQuasarNetwork(cfg, 2, 2)
+	nodes := QuasarMockNetwork(nil, cfg, 2, 2)
 
 	// start nodes and wait for filters to propagate
 	nodes[0].Start()
@@ -239,7 +239,7 @@ func TestNoPeers(t *testing.T) {
 		filtersK:         6,    // hashes
 	}
 
-	nodes := MockQuasarNetwork(cfg, 1, 0)
+	nodes := QuasarMockNetwork(nil, cfg, 1, 0)
 	nodes[0].Start()
 	nodes[0].Publish([]byte("bar"), []byte("bardata"))
 	nodes[0].Stop()

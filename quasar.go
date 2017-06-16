@@ -25,11 +25,11 @@ type Quasar struct {
 }
 
 // NewQuasar create new instance with the sane defaults.
-func NewQuasar() *Quasar {
+// Optionally supply logger to monitor internals.
+func NewQuasar(l *QuasarLog) *Quasar {
 	// FIXME enable passing of nodeId/pubkey
 	// FIXME add default network
-	// FIXME add default logger
-	return newQuasar(nil, nil, defaultConfig)
+	return newQuasar(nil, l, defaultConfig)
 }
 
 func newQuasar(n networkOverlay, l *QuasarLog, c config) *Quasar {

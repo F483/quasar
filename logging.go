@@ -1,46 +1,50 @@
 package quasar
 
-type QuasarUpdateLog struct {
+// QuasarLogUpdate used for monitoring internal filter updates.
+type QuasarLogUpdate struct {
 	node   *Quasar
 	entry  *peerUpdate
 	target *pubkey
 }
 
-type QuasarEventLog struct {
+// QuasarLogEvent used for monitoring internal events.
+type QuasarLogEvent struct {
 	node   *Quasar
 	entry  *event
 	target *pubkey
 }
 
+// QuasarLog provides a logger used by Quasar nodes for logging internals.
 type QuasarLog struct {
-	UpdatesSent         chan *QuasarUpdateLog
-	UpdatesReceived     chan *QuasarUpdateLog
-	UpdatesSuccess      chan *QuasarUpdateLog // (added to filters)
-	UpdatesFail         chan *QuasarUpdateLog // (not from neighbour)
-	EventsPublished     chan *QuasarEventLog
-	EventsReceived      chan *QuasarEventLog
-	EventsDeliver       chan *QuasarEventLog
-	EventsDropDuplicate chan *QuasarEventLog
-	EventsDropTTL       chan *QuasarEventLog
-	EventsRouteDirect   chan *QuasarEventLog
-	EventsRouteWell     chan *QuasarEventLog
-	EventsRouteRandom   chan *QuasarEventLog
+	UpdatesSent         chan *QuasarLogUpdate
+	UpdatesReceived     chan *QuasarLogUpdate
+	UpdatesSuccess      chan *QuasarLogUpdate // added to filters
+	UpdatesFail         chan *QuasarLogUpdate // not from neighbour
+	EventsPublished     chan *QuasarLogEvent
+	EventsReceived      chan *QuasarLogEvent
+	EventsDeliver       chan *QuasarLogEvent
+	EventsDropDuplicate chan *QuasarLogEvent
+	EventsDropTTL       chan *QuasarLogEvent
+	EventsRouteDirect   chan *QuasarLogEvent
+	EventsRouteWell     chan *QuasarLogEvent
+	EventsRouteRandom   chan *QuasarLogEvent
 }
 
+// NewQuasarLog creats a new default logger instance.
 func NewQuasarLog() *QuasarLog {
 	return &QuasarLog{
-		UpdatesSent:         make(chan *QuasarUpdateLog),
-		UpdatesReceived:     make(chan *QuasarUpdateLog),
-		UpdatesSuccess:      make(chan *QuasarUpdateLog),
-		UpdatesFail:         make(chan *QuasarUpdateLog),
-		EventsPublished:     make(chan *QuasarEventLog),
-		EventsReceived:      make(chan *QuasarEventLog),
-		EventsDeliver:       make(chan *QuasarEventLog),
-		EventsDropDuplicate: make(chan *QuasarEventLog),
-		EventsDropTTL:       make(chan *QuasarEventLog),
-		EventsRouteDirect:   make(chan *QuasarEventLog),
-		EventsRouteWell:     make(chan *QuasarEventLog),
-		EventsRouteRandom:   make(chan *QuasarEventLog),
+		UpdatesSent:         make(chan *QuasarLogUpdate),
+		UpdatesReceived:     make(chan *QuasarLogUpdate),
+		UpdatesSuccess:      make(chan *QuasarLogUpdate),
+		UpdatesFail:         make(chan *QuasarLogUpdate),
+		EventsPublished:     make(chan *QuasarLogEvent),
+		EventsReceived:      make(chan *QuasarLogEvent),
+		EventsDeliver:       make(chan *QuasarLogEvent),
+		EventsDropDuplicate: make(chan *QuasarLogEvent),
+		EventsDropTTL:       make(chan *QuasarLogEvent),
+		EventsRouteDirect:   make(chan *QuasarLogEvent),
+		EventsRouteWell:     make(chan *QuasarLogEvent),
+		EventsRouteRandom:   make(chan *QuasarLogEvent),
 	}
 }
 
@@ -52,7 +56,7 @@ func (l *QuasarLog) updateSent(n *Quasar, i uint32, f []byte, t *pubkey) {
 			id = &idv
 		}
 		u := &peerUpdate{peer: id, index: i, filter: f}
-		l.UpdatesSent <- &QuasarUpdateLog{
+		l.UpdatesSent <- &QuasarLogUpdate{
 			node: n, entry: u, target: t,
 		}
 	}
@@ -60,7 +64,7 @@ func (l *QuasarLog) updateSent(n *Quasar, i uint32, f []byte, t *pubkey) {
 
 func (l *QuasarLog) updateReceived(n *Quasar, u *peerUpdate) {
 	if l != nil && l.UpdatesReceived != nil {
-		l.UpdatesReceived <- &QuasarUpdateLog{
+		l.UpdatesReceived <- &QuasarLogUpdate{
 			node: n, entry: u, target: nil,
 		}
 	}
@@ -68,7 +72,7 @@ func (l *QuasarLog) updateReceived(n *Quasar, u *peerUpdate) {
 
 func (l *QuasarLog) updateSuccess(n *Quasar, u *peerUpdate) {
 	if l != nil && l.UpdatesSuccess != nil {
-		l.UpdatesSuccess <- &QuasarUpdateLog{
+		l.UpdatesSuccess <- &QuasarLogUpdate{
 			node: n, entry: u, target: nil,
 		}
 	}
@@ -76,7 +80,7 @@ func (l *QuasarLog) updateSuccess(n *Quasar, u *peerUpdate) {
 
 func (l *QuasarLog) updateFail(n *Quasar, u *peerUpdate) {
 	if l != nil && l.UpdatesFail != nil {
-		l.UpdatesFail <- &QuasarUpdateLog{
+		l.UpdatesFail <- &QuasarLogUpdate{
 			node: n, entry: u, target: nil,
 		}
 	}
@@ -84,7 +88,7 @@ func (l *QuasarLog) updateFail(n *Quasar, u *peerUpdate) {
 
 func (l *QuasarLog) eventPublished(n *Quasar, e *event) {
 	if l != nil && l.EventsPublished != nil {
-		l.EventsPublished <- &QuasarEventLog{
+		l.EventsPublished <- &QuasarLogEvent{
 			node: n, entry: e, target: nil,
 		}
 	}
@@ -92,7 +96,7 @@ func (l *QuasarLog) eventPublished(n *Quasar, e *event) {
 
 func (l *QuasarLog) eventReceived(n *Quasar, e *event) {
 	if l != nil && l.EventsReceived != nil {
-		l.EventsReceived <- &QuasarEventLog{
+		l.EventsReceived <- &QuasarLogEvent{
 			node: n, entry: e, target: nil,
 		}
 	}
@@ -100,7 +104,7 @@ func (l *QuasarLog) eventReceived(n *Quasar, e *event) {
 
 func (l *QuasarLog) eventDeliver(n *Quasar, e *event) {
 	if l != nil && l.EventsDeliver != nil {
-		l.EventsDeliver <- &QuasarEventLog{
+		l.EventsDeliver <- &QuasarLogEvent{
 			node: n, entry: e, target: nil,
 		}
 	}
@@ -108,7 +112,7 @@ func (l *QuasarLog) eventDeliver(n *Quasar, e *event) {
 
 func (l *QuasarLog) eventDropDuplicate(n *Quasar, e *event) {
 	if l != nil && l.EventsDropDuplicate != nil {
-		l.EventsDropDuplicate <- &QuasarEventLog{
+		l.EventsDropDuplicate <- &QuasarLogEvent{
 			node: n, entry: e, target: nil,
 		}
 	}
@@ -116,7 +120,7 @@ func (l *QuasarLog) eventDropDuplicate(n *Quasar, e *event) {
 
 func (l *QuasarLog) eventDropTTL(n *Quasar, e *event) {
 	if l != nil && l.EventsDropTTL != nil {
-		l.EventsDropTTL <- &QuasarEventLog{
+		l.EventsDropTTL <- &QuasarLogEvent{
 			node: n, entry: e, target: nil,
 		}
 	}
@@ -124,7 +128,7 @@ func (l *QuasarLog) eventDropTTL(n *Quasar, e *event) {
 
 func (l *QuasarLog) eventRouteDirect(n *Quasar, e *event, t *pubkey) {
 	if l != nil && l.EventsRouteDirect != nil {
-		l.EventsRouteDirect <- &QuasarEventLog{
+		l.EventsRouteDirect <- &QuasarLogEvent{
 			node: n, entry: e, target: t,
 		}
 	}
@@ -132,7 +136,7 @@ func (l *QuasarLog) eventRouteDirect(n *Quasar, e *event, t *pubkey) {
 
 func (l *QuasarLog) eventRouteWell(n *Quasar, e *event, t *pubkey) {
 	if l != nil && l.EventsRouteWell != nil {
-		l.EventsRouteWell <- &QuasarEventLog{
+		l.EventsRouteWell <- &QuasarLogEvent{
 			node: n, entry: e, target: t,
 		}
 	}
@@ -140,7 +144,7 @@ func (l *QuasarLog) eventRouteWell(n *Quasar, e *event, t *pubkey) {
 
 func (l *QuasarLog) eventRouteRandom(n *Quasar, e *event, t *pubkey) {
 	if l != nil && l.EventsRouteRandom != nil {
-		l.EventsRouteRandom <- &QuasarEventLog{
+		l.EventsRouteRandom <- &QuasarLogEvent{
 			node: n, entry: e, target: t,
 		}
 	}
