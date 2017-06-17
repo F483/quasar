@@ -52,6 +52,9 @@ func (mo *mockOverlay) Stop() {
 // subscriptions/events/delivery, but not network churn or peer discovery.
 func NewMockNetwork(l *Logger, c *Config, size int, peerCnt int) []*Node {
 
+	// TODO remove peerCnt from args
+	// TODO add chance of dropped package to args
+
 	net := &mockNetwork{
 		peers:          make([]*pubkey, size, size),
 		connections:    make(map[pubkey][]pubkey),
