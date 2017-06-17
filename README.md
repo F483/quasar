@@ -11,3 +11,14 @@
 # Quasar
 
 Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/research/wp-content/uploads/2008/02/iptps08-quasar.pdf).
+
+
+# Benchmarks / Statistics
+
+
+## Subscription Distribution
+
+For testing a long tail power law was assumed for the distribution of 
+topic subscriptions, loosly based on twitters data.
+
+![Subscription Distribution](https://github.com/f483/quasar/raw/master/_benchmark/subdistribution.png)

@@ -28,6 +28,7 @@ type Logger struct {
 	EventsRouteDirect   chan *LogEvent
 	EventsRouteWell     chan *LogEvent
 	EventsRouteRandom   chan *LogEvent
+	// TODO add overlay network logging
 }
 
 // NewLogger creats a new default logger instance.

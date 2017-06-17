@@ -12,13 +12,6 @@ type Config struct {
 	FiltersK         uint64  // number of hashes
 }
 
-/*
-Safeish Filter (UDP unlikely to fragment as under MTU 1460)
-n: 1024 // number of elements
-m: 8192 // filter size = 1k
-k: 6    // number of hash functions = (m / n) log(2)
-*/
-
 // StandardConfig uses well agreed upon values, only deviate for testing.
 var StandardConfig = Config{
 	DefaultEventTTL:  32,              // 4 missed wells

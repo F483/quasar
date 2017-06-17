@@ -50,8 +50,7 @@ func (mo *mockOverlay) Stop() {
 // NewMockNetwork creates network that uses the quasar protocol  but
 // with a mock overlay network. Can be used to test
 // subscriptions/events/delivery, but not network churn or peer discovery.
-func NewMockNetwork(l *Logger, cfg *Config,
-	size int, peerCnt int) []*Node {
+func NewMockNetwork(l *Logger, c *Config, size int, peerCnt int) []*Node {
 
 	net := &mockNetwork{
 		peers:          make([]*pubkey, size, size),
@@ -83,7 +82,7 @@ func NewMockNetwork(l *Logger, cfg *Config,
 	nodes := make([]*Node, size, size)
 	for i := 0; i < size; i++ {
 		n := mockOverlay{peer: *net.peers[i], net: net}
-		nodes[i] = newNode(&n, l, cfg)
+		nodes[i] = newNode(&n, l, c)
 	}
 
 	return nodes
