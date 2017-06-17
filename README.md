@@ -16,9 +16,21 @@ Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/resea
 # Benchmarks / Statistics
 
 
-## Subscription Distribution
+## Test / Benchmark setup
+
+### Mock overlay network usage.
+
+For initial testing a mock overlay network was used, with peers connected
+randomly to one another. This allows quick isolated testing of the quasar
+protocol. 
+
+It does not allow testing of: Peer discovery, churn behaviour, 
+NAT traversal or behaviour of different overlay networks.
+
+### Assumed topic subscription distribution.
 
 For testing a long tail power law was assumed for the distribution of 
-topic subscriptions, loosly based on twitters data.
+topic subscriptions, loosly based on twitter data.
 
 ![Subscription Distribution](https://github.com/f483/quasar/raw/master/_benchmark/subdistribution.png)
+
