@@ -20,9 +20,6 @@ Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/resea
 The more saturated the root subscription bloom filter becomes, the more
 false positives.
 
-TODO how to test larger filter size traffic vs larger false positive
-traffic?
-
 ![Subscription False Positive rate](https://github.com/f483/quasar/raw/master/_simulation/subfprate.png)
 
 ## Topic subscription distribution.
