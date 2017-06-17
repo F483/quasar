@@ -13,7 +13,7 @@
 Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/research/wp-content/uploads/2008/02/iptps08-quasar.pdf).
 
 
-# Statistics
+# Simulation Statistics
 
 ## Subscription false positive rate.
 
@@ -21,26 +21,23 @@ The more saturated the root subscription bloom filter becomes, the more
 false positives.
 
 TODO how to test larger filter size traffic vs larger false positive
-traffic.
+traffic?
 
 ![Subscription False Positive rate](https://github.com/f483/quasar/raw/master/_simulation/subfprate.png)
 
-
-# Simulation setup
-
-## Mock overlay network usage.
-
-For the simulaton a mock overlay network is used, with peers connected
-randomly to one another. This allows quick isolated testing of the quasar
-protocol. 
-
-It does not allow testing of: Peer discovery, churn behaviour, 
-NAT traversal or behaviour of different overlay networks.
-
-### Assumed topic subscription distribution.
+## Topic subscription distribution.
 
 A long tail power law is assumed for the distribution of topic
 subscriptions, loosly based on twitter data.
 
 ![Subscription Distribution](https://github.com/f483/quasar/raw/master/_simulation/subdistribution.png)
+
+
+## Testing Setup
+
+The simulation uses a mock overlay network. Peers connected randomly to
+one another. This allows quick isolated testing of the quasar protocol.
+
+It does not allow testing of: Peer discovery, churn behaviour, NAT traversal or behaviour of different overlay networks.
+
 

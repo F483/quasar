@@ -33,7 +33,7 @@ func getChartData(subLimit int) ([]float64, []float64) {
 
 func drawChart(res http.ResponseWriter, req *http.Request) {
 
-	xValues, yValues := getChartData(2000)
+	xValues, yValues := getChartData(1500)
 
 	graph := chart.Chart{
 		XAxis: chart.XAxis{
