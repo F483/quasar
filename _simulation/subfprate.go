@@ -37,12 +37,12 @@ func drawChart(res http.ResponseWriter, req *http.Request) {
 
 	graph := chart.Chart{
 		XAxis: chart.XAxis{
-			Name:      "Subscriptions",
+			Name:      "Node topic subscriptions.",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
 		YAxis: chart.YAxis{
-			Name:      "False Positive Rate",
+			Name:      "Node false positive rate.",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},

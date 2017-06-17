@@ -61,7 +61,7 @@ func drawChart(res http.ResponseWriter, req *http.Request) {
 			Style:     chart.StyleShow(),
 		},
 		YAxis: chart.YAxis{
-			Name:      "Subscriptions",
+			Name:      "Subscriptions per topic.",
 			NameStyle: chart.StyleShow(),
 			Style:     chart.StyleShow(),
 		},
