@@ -13,10 +13,10 @@
 Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/research/wp-content/uploads/2008/02/iptps08-quasar.pdf).
 
 
-# Benchmarks / Statistics
+# Simulation statistics
 
 
-## Test / Benchmark setup
+## Simulation setup
 
 ### Mock overlay network usage.
 
@@ -29,8 +29,8 @@ NAT traversal or behaviour of different overlay networks.
 
 ### Assumed topic subscription distribution.
 
-For testing a long tail power law was assumed for the distribution of 
-topic subscriptions, loosly based on twitter data.
+A long tail power law was assumed for the distribution of topic
+subscriptions, loosly based on twitter data.
 
-![Subscription Distribution](https://github.com/f483/quasar/raw/master/_benchmark/subdistribution.png)
+![Subscription Distribution](https://github.com/f483/quasar/raw/master/_simulation/subdistribution.png)
 
