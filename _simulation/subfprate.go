@@ -6,34 +6,28 @@ import (
 	"github.com/f483/quasar"
 	"github.com/wcharczuk/go-chart"
 	"github.com/willf/bloom"
-	"math"
-	"math/rand"
 	"net/http"
 )
 
-func getTopic() int {
-	// vaguely based on twitter distribution
-	x := rand.NormFloat64() * rand.NormFloat64() * rand.NormFloat64()
-	return int(math.Abs(x * 10000.0))
-}
-
-func getChartData(subLimit int) ([]float64, []float64) {
-	xValues := make([]float64, subLimit, subLimit)
-	yValues := make([]float64, subLimit, subLimit)
-	for n := 0; n < subLimit; n++ {
+func getChartData() ([]float64, []float64) {
+	entries := 128
+	xValues := make([]float64, entries, entries)
+	yValues := make([]float64, entries, entries)
+	for i := 0; i < entries; i++ {
+		n := i * 16
 		m := quasar.StandardConfig.FiltersM
 		k := quasar.StandardConfig.FiltersK
 		f := bloom.New(uint(m), uint(k))
 		fpRate := f.EstimateFalsePositiveRate(uint(n))
-		xValues[n] = float64(n)
-		yValues[n] = fpRate
+		xValues[i] = float64(n)
+		yValues[i] = fpRate
 	}
 	return xValues, yValues
 }
 
 func drawChart(res http.ResponseWriter, req *http.Request) {
 
-	xValues, yValues := getChartData(1500)
+	xValues, yValues := getChartData()
 
 	graph := chart.Chart{
 		XAxis: chart.XAxis{

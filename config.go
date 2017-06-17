@@ -20,6 +20,6 @@ var StandardConfig = Config{
 	HistoryLimit:     1048576,         // remember last 1G
 	HistoryAccuracy:  1.0 / 1048576.0, // avg 1 false positive per 1G
 	FiltersDepth:     8,               // reaches many many nodes
-	FiltersM:         8192,            // 1K (packet under safe MTU 1400)
-	FiltersK:         6,               // (m / n) log(2)
+	FiltersM:         10240,           // keep packet under safe MTU 1400
+	FiltersK:         7,               // =(m / n) log(2) with n=1024
 }
