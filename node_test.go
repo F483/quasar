@@ -17,26 +17,6 @@ var testConfig = Config{
 	FiltersK:         7,     // hashes
 }
 
-func TestNewEvent(t *testing.T) {
-	ttl := uint32(42)
-	event := newEvent([]byte("test topic"), []byte("test message"), ttl)
-	if event == nil {
-		t.Errorf("Expected event!")
-	}
-	if string(event.message) != "test message" {
-		t.Errorf("event message not set!")
-	}
-	if event.ttl != ttl {
-		t.Errorf("event ttl not set!")
-	}
-	if event.publishers == nil && len(event.publishers) != 0 {
-		t.Errorf("event publishers not set!")
-	}
-	if event.topicDigest == nil {
-		t.Errorf("event digest not set!")
-	}
-}
-
 func TestSubscriptions(t *testing.T) {
 	n := newNode(nil, nil, &testConfig)
 
@@ -127,7 +107,7 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 func TestEventDelivery(t *testing.T) {
 	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 20)
+	nodes := NewMockNetwork(nil, cfg, 2)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -137,12 +117,12 @@ func TestEventDelivery(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*8))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
 
 	// create event
 	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
 
-	timeout := time.Duration(cfg.PropagationDelay*8) * time.Millisecond
+	timeout := time.Duration(cfg.PropagationDelay*3) * time.Millisecond
 	select {
 	case <-time.After(timeout):
 		t.Errorf("Timeout: Event not received!")
@@ -162,15 +142,16 @@ func TestEventTimeout(t *testing.T) {
 	// get coverage for dropping ttl = 0 events
 	// may be dropped by history with few nodes
 
-	cfg := &testConfig
+	cfg := testConfig
+	cfg.DefaultEventTTL = 1
 
-	nodes := NewMockNetwork(nil, cfg, 20)
+	nodes := NewMockNetwork(nil, &cfg, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay))
 
 	// create event
 	nodes[1].Publish([]byte("bar"), []byte("bardata"))
@@ -183,16 +164,7 @@ func TestEventTimeout(t *testing.T) {
 }
 
 func TestExpiredPeerData(t *testing.T) {
-	cfg := &Config{
-		DefaultEventTTL:  2,
-		FilterFreshness:  32,
-		PropagationDelay: 12,
-		HistoryLimit:     256,
-		HistoryAccuracy:  0.000001,
-		FiltersDepth:     8,
-		FiltersM:         10240, // m 1k
-		FiltersK:         7,     // hashes
-	}
+	cfg := &testConfig
 
 	nodes := NewMockNetwork(nil, cfg, 2)
 
