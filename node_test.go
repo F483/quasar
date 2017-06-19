@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+var testConfig = Config{
+	DefaultEventTTL:  32,
+	FilterFreshness:  32,
+	PropagationDelay: 12,
+	HistoryLimit:     1000000,
+	HistoryAccuracy:  0.000001,
+	FiltersDepth:     8,
+	FiltersM:         10240, // m 1k
+	FiltersK:         7,     // hashes
+}
+
 func TestNewEvent(t *testing.T) {
 	ttl := uint32(42)
 	event := newEvent([]byte("test topic"), []byte("test message"), ttl)
@@ -27,16 +38,7 @@ func TestNewEvent(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	n := newNode(nil, nil, &Config{
-		DefaultEventTTL:  32,
-		FilterFreshness:  32,
-		PropagationDelay: 12,
-		HistoryLimit:     256,
-		HistoryAccuracy:  0.000001,
-		FiltersDepth:     8,
-		FiltersM:         8192, // m 1k
-		FiltersK:         6,    // hashes
-	})
+	n := newNode(nil, nil, &testConfig)
 
 	a := make(chan []byte)
 	n.Subscribe([]byte("a"), a)
@@ -123,18 +125,9 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 }
 
 func TestEventDelivery(t *testing.T) {
-	cfg := &Config{
-		DefaultEventTTL:  32,
-		FilterFreshness:  32,
-		PropagationDelay: 12,
-		HistoryLimit:     256,
-		HistoryAccuracy:  0.000001,
-		FiltersDepth:     8,
-		FiltersM:         8192, // m 1k
-		FiltersK:         6,    // hashes
-	}
+	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 20, 20)
+	nodes := NewMockNetwork(nil, cfg, 20)
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -144,15 +137,15 @@ func TestEventDelivery(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*8))
 
 	// create event
 	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
 
-	timeout := time.Duration(cfg.PropagationDelay) * time.Millisecond
+	timeout := time.Duration(cfg.PropagationDelay*8) * time.Millisecond
 	select {
 	case <-time.After(timeout):
-		t.Errorf("Timeout event not received!")
+		t.Errorf("Timeout: Event not received!")
 	case data := <-fooReceiver:
 		if !reflect.DeepEqual(data, []byte("foodata")) {
 			t.Errorf("Incorrect event data!")
@@ -169,18 +162,9 @@ func TestEventTimeout(t *testing.T) {
 	// get coverage for dropping ttl = 0 events
 	// may be dropped by history with few nodes
 
-	cfg := &Config{
-		DefaultEventTTL:  2,
-		FilterFreshness:  32,
-		PropagationDelay: 12,
-		HistoryLimit:     256,
-		HistoryAccuracy:  0.000001,
-		FiltersDepth:     8,
-		FiltersM:         8192, // m 1k
-		FiltersK:         6,    // hashes
-	}
+	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 20, 20)
+	nodes := NewMockNetwork(nil, cfg, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
@@ -206,11 +190,11 @@ func TestExpiredPeerData(t *testing.T) {
 		HistoryLimit:     256,
 		HistoryAccuracy:  0.000001,
 		FiltersDepth:     8,
-		FiltersM:         8192, // m 1k
-		FiltersK:         6,    // hashes
+		FiltersM:         10240, // m 1k
+		FiltersK:         7,     // hashes
 	}
 
-	nodes := NewMockNetwork(nil, cfg, 2, 2)
+	nodes := NewMockNetwork(nil, cfg, 2)
 
 	// start nodes and wait for filters to propagate
 	nodes[0].Start()
@@ -228,18 +212,9 @@ func TestExpiredPeerData(t *testing.T) {
 }
 
 func TestNoPeers(t *testing.T) {
-	cfg := &Config{
-		DefaultEventTTL:  2,
-		FilterFreshness:  32,
-		PropagationDelay: 12,
-		HistoryLimit:     256,
-		HistoryAccuracy:  0.000001,
-		FiltersDepth:     8,
-		FiltersM:         8192, // m 1k
-		FiltersK:         6,    // hashes
-	}
+	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 1, 0)
+	nodes := NewMockNetwork(nil, cfg, 1)
 	nodes[0].Start()
 	nodes[0].Publish([]byte("bar"), []byte("bardata"))
 	nodes[0].Stop()

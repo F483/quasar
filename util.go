@@ -1,6 +1,9 @@
 package quasar
 
-import "fmt"
+import (
+	"fmt"
+	"math/rand"
+)
 
 func mustBeTrue(value bool, format string, a ...interface{}) {
 	if value != true {
@@ -11,5 +14,15 @@ func mustBeTrue(value bool, format string, a ...interface{}) {
 func mustNotError(err error) {
 	if err != nil {
 		panic(fmt.Sprintf("Enexpected error: %s", err.Error()))
+	}
+}
+
+func randIntnExcluding(limit int, exclude int) int {
+	// FIXME validate input is sane
+	for {
+		n := rand.Intn(limit)
+		if n != exclude {
+			return n
+		}
 	}
 }

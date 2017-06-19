@@ -37,4 +37,3 @@ one another. This allows quick isolated testing of the quasar protocol.
 
 It does not allow testing of: Peer discovery, churn behaviour, NAT traversal or behaviour of different overlay networks.
 
-
