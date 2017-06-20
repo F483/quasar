@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-var testConfig = Config{
-	DefaultEventTTL:  32,
-	FilterFreshness:  64,
-	PropagationDelay: 24,
-	HistoryLimit:     1000000,
-	HistoryAccuracy:  0.000001,
-	FiltersDepth:     8,
-	FiltersM:         10240, // m 1k
-	FiltersK:         7,     // hashes
-}
-
 func TestSubscriptions(t *testing.T) {
 	n := newNode(nil, nil, &testConfig)
 
@@ -113,7 +102,7 @@ func TestEventDelivery(t *testing.T) {
 	// la := LogToConsole("Subscriber", stopa)
 	// lb := LogToConsole("Publisher", stopb)
 
-	nodes := NewMockNetwork(nil, cfg, 2)
+	nodes := newMockNetwork(nil, cfg, 2)
 	// nodes[0].log = la
 	// nodes[1].log = lb
 
@@ -150,7 +139,7 @@ func TestEventTimeout(t *testing.T) {
 	cfg := testConfig
 	cfg.DefaultEventTTL = 1
 
-	nodes := NewMockNetwork(nil, &cfg, 20)
+	nodes := newMockNetwork(nil, &cfg, 20)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
@@ -171,7 +160,7 @@ func TestEventTimeout(t *testing.T) {
 func TestExpiredPeerData(t *testing.T) {
 	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 2)
+	nodes := newMockNetwork(nil, cfg, 2)
 
 	// start nodes and wait for filters to propagate
 	nodes[0].Start()
@@ -191,7 +180,7 @@ func TestExpiredPeerData(t *testing.T) {
 func TestNoPeers(t *testing.T) {
 	cfg := &testConfig
 
-	nodes := NewMockNetwork(nil, cfg, 1)
+	nodes := newMockNetwork(nil, cfg, 1)
 	nodes[0].Start()
 	nodes[0].Publish([]byte("bar"), []byte("bardata"))
 	nodes[0].Stop()

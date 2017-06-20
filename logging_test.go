@@ -40,7 +40,7 @@ func setReceived(b *bool, t *testing.T) {
 
 func TestUpdateLogging(t *testing.T) {
 
-	l := NewLogger()
+	l := NewLogger(10)
 	allSent := make(chan bool)
 	go sendUpdateLogEntries(l, allSent)
 
@@ -101,7 +101,7 @@ func collectEventLogs(published *bool, received *bool, deliver *bool,
 
 func TestEventLogging(t *testing.T) {
 
-	l := NewLogger()
+	l := NewLogger(10)
 	allSent := make(chan bool)
 	go sendEventLogEntries(l, allSent)
 

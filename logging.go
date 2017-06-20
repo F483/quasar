@@ -34,20 +34,21 @@ type Logger struct {
 }
 
 // NewLogger creats a new default logger instance.
-func NewLogger() *Logger {
+func NewLogger(bufsize int) *Logger {
+	// TODO add chan buffer size to args
 	return &Logger{
-		UpdatesSent:         make(chan *LogUpdate),
-		UpdatesReceived:     make(chan *LogUpdate),
-		UpdatesSuccess:      make(chan *LogUpdate),
-		UpdatesFail:         make(chan *LogUpdate),
-		EventsPublished:     make(chan *LogEvent),
-		EventsReceived:      make(chan *LogEvent),
-		EventsDeliver:       make(chan *LogEvent),
-		EventsDropDuplicate: make(chan *LogEvent),
-		EventsDropTTL:       make(chan *LogEvent),
-		EventsRouteDirect:   make(chan *LogEvent),
-		EventsRouteWell:     make(chan *LogEvent),
-		EventsRouteRandom:   make(chan *LogEvent),
+		UpdatesSent:         make(chan *LogUpdate, bufsize),
+		UpdatesReceived:     make(chan *LogUpdate, bufsize),
+		UpdatesSuccess:      make(chan *LogUpdate, bufsize),
+		UpdatesFail:         make(chan *LogUpdate, bufsize),
+		EventsPublished:     make(chan *LogEvent, bufsize),
+		EventsReceived:      make(chan *LogEvent, bufsize),
+		EventsDeliver:       make(chan *LogEvent, bufsize),
+		EventsDropDuplicate: make(chan *LogEvent, bufsize),
+		EventsDropTTL:       make(chan *LogEvent, bufsize),
+		EventsRouteDirect:   make(chan *LogEvent, bufsize),
+		EventsRouteWell:     make(chan *LogEvent, bufsize),
+		EventsRouteRandom:   make(chan *LogEvent, bufsize),
 	}
 }
 
@@ -165,7 +166,7 @@ func printLogEvent(prefix string, src string, le *LogEvent) {
 
 func LogToConsole(prefix string, stopLogging chan bool) *Logger {
 	mustNotBeNil(stopLogging)
-	l := NewLogger()
+	l := NewLogger(10)
 	go func() {
 		for {
 			select {
