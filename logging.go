@@ -1,5 +1,7 @@
 package quasar
 
+import "fmt"
+
 // LogUpdate used for monitoring internal filter updates.
 type LogUpdate struct {
 	node   *Node
@@ -149,4 +151,51 @@ func (l *Logger) eventRouteRandom(n *Node, e *event, t *pubkey) {
 			node: n, entry: e, target: t,
 		}
 	}
+}
+
+func printLogUpdate(prefix string, src string, lu *LogUpdate) {
+	fmt.Printf("%s: %s\n", prefix, src)
+}
+
+func printLogEvent(prefix string, src string, le *LogEvent) {
+	fmt.Printf("%s: %s\n", prefix, src)
+}
+
+func LogToConsole(prefix string, stopLogging chan bool) *Logger {
+	mustNotBeNil(stopLogging)
+	l := NewLogger()
+	go func() {
+		for {
+			select {
+			case lu := <-l.UpdatesSent:
+				go printLogUpdate(prefix, "UpdatesSent", lu)
+			case lu := <-l.UpdatesReceived:
+				go printLogUpdate(prefix, "UpdatesReceived", lu)
+			case lu := <-l.UpdatesSuccess:
+				go printLogUpdate(prefix, "UpdatesSuccess", lu)
+			case lu := <-l.UpdatesFail:
+				go printLogUpdate(prefix, "UpdatesFail", lu)
+			case le := <-l.EventsPublished:
+				go printLogEvent(prefix, "EventsPublished", le)
+			case le := <-l.EventsReceived:
+				go printLogEvent(prefix, "EventsReceived", le)
+			case le := <-l.EventsDeliver:
+				go printLogEvent(prefix, "EventsDeliver", le)
+			case le := <-l.EventsDropDuplicate:
+				go printLogEvent(prefix, "EventsDropDuplicate", le)
+			case le := <-l.EventsDropTTL:
+				go printLogEvent(prefix, "EventsDropTTL", le)
+			case le := <-l.EventsRouteDirect:
+				go printLogEvent(prefix, "EventsRouteDirect", le)
+			case le := <-l.EventsRouteWell:
+				go printLogEvent(prefix, "EventsRouteWell", le)
+			case le := <-l.EventsRouteRandom:
+				go printLogEvent(prefix, "EventsRouteRandom", le)
+			case <-stopLogging:
+				go fmt.Println("Stop logging received!")
+				return
+			}
+		}
+	}()
+	return l
 }

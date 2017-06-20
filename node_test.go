@@ -8,8 +8,8 @@ import (
 
 var testConfig = Config{
 	DefaultEventTTL:  32,
-	FilterFreshness:  32,
-	PropagationDelay: 12,
+	FilterFreshness:  64,
+	PropagationDelay: 24,
 	HistoryLimit:     1000000,
 	HistoryAccuracy:  0.000001,
 	FiltersDepth:     8,
@@ -107,7 +107,14 @@ func checkSubs(given [][]byte, expected [][]byte) bool {
 func TestEventDelivery(t *testing.T) {
 	cfg := &testConfig
 
+	// stopa := make(chan bool)
+	// stopb := make(chan bool)
+	// la := LogToConsole("Subscriber", stopa)
+	// lb := LogToConsole("Publisher", stopb)
+
 	nodes := NewMockNetwork(nil, cfg, 2)
+	// nodes[0].log = la
+	// nodes[1].log = lb
 
 	// set subscriptions
 	fooReceiver := make(chan []byte)
@@ -117,12 +124,12 @@ func TestEventDelivery(t *testing.T) {
 	for _, node := range nodes {
 		node.Start()
 	}
-	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*3))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*2))
 
 	// create event
-	nodes[len(nodes)-1].Publish([]byte("foo"), []byte("foodata"))
+	nodes[1].Publish([]byte("foo"), []byte("foodata"))
 
-	timeout := time.Duration(cfg.PropagationDelay*3) * time.Millisecond
+	timeout := time.Duration(cfg.PropagationDelay*2) * time.Millisecond
 	select {
 	case <-time.After(timeout):
 		t.Errorf("Timeout: Event not received!")
@@ -132,7 +139,9 @@ func TestEventDelivery(t *testing.T) {
 		}
 	}
 
-	// stop nodes
+	// stop nodes and logger
+	// stopa <- true
+	// stopb <- true
 	for _, node := range nodes {
 		node.Stop()
 	}
