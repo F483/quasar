@@ -155,10 +155,12 @@ func (l *Logger) eventRouteRandom(n *Node, e *event, t *pubkey) {
 
 func printLogUpdate(prefix string, src string, lu *LogUpdate) {
 	fmt.Printf("%s: %s\n", prefix, src)
+	// TODO log more info
 }
 
 func printLogEvent(prefix string, src string, le *LogEvent) {
 	fmt.Printf("%s: %s\n", prefix, src)
+	// TODO log more info
 }
 
 func LogToConsole(prefix string, stopLogging chan bool) *Logger {

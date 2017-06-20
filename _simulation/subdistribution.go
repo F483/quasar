@@ -16,7 +16,7 @@ func getTopic() int {
 	return int(math.Abs(x * 10000.0))
 }
 
-func getDistribution(totalSubs int, topicLimit int) ([]float64, []float64) {
+func getValues(totalSubs int, topicLimit int) ([]float64, []float64) {
 	subCount := make(map[int]int)
 	for i := 0; i < totalSubs; i++ {
 		topic := getTopic()
@@ -52,7 +52,7 @@ func drawChart(res http.ResponseWriter, req *http.Request) {
 	users := 328000000
 	avgSubs := 108
 	total := users * avgSubs
-	xValues, yValues := getDistribution(total/1000, 100)
+	xValues, yValues := getValues(total/1000, 100)
 
 	graph := chart.Chart{
 		XAxis: chart.XAxis{

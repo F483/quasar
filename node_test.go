@@ -1,6 +1,7 @@
 package quasar
 
 import (
+	"bytes"
 	"reflect"
 	"testing"
 	"time"
@@ -20,37 +21,37 @@ var testConfig = Config{
 func TestSubscriptions(t *testing.T) {
 	n := newNode(nil, nil, &testConfig)
 
-	a := make(chan []byte)
-	n.Subscribe([]byte("a"), a)
+	var a bytes.Buffer
+	n.Subscribe([]byte("a"), &a)
 	subs := n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
-	b1 := make(chan []byte)
-	n.Subscribe([]byte("b"), b1)
+	var b1 bytes.Buffer
+	n.Subscribe([]byte("b"), &b1)
 	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
-	b2 := make(chan []byte)
-	n.Subscribe([]byte("b"), b2)
+	var b2 bytes.Buffer
+	n.Subscribe([]byte("b"), &b2)
 	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
-	c1 := make(chan []byte)
-	n.Subscribe([]byte("c"), c1)
+	var c1 bytes.Buffer
+	n.Subscribe([]byte("c"), &c1)
 	subs = n.Subscriptions()
 	expectedSubs := [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
 		t.Errorf("Incorrect subscriptions!")
 	}
 
-	c2 := make(chan []byte)
-	n.Subscribe([]byte("c"), c2)
+	var c2 bytes.Buffer
+	n.Subscribe([]byte("c"), &c2)
 	subs = n.Subscriptions()
 	expectedSubs = [][]byte{[]byte("a"), []byte("b"), []byte("c")}
 	if !checkSubs(subs, expectedSubs) {
@@ -68,7 +69,7 @@ func TestSubscriptions(t *testing.T) {
 	if len(n.Subscribers([]byte("b"))) != 2 {
 		t.Errorf("Incorrect subscribers!")
 	}
-	n.Unsubscribe([]byte("b"), b1)
+	n.Unsubscribe([]byte("b"), &b1)
 	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a"), []byte("b")}) {
 		t.Errorf("Incorrect subscriptions!")
@@ -78,7 +79,7 @@ func TestSubscriptions(t *testing.T) {
 	}
 
 	// clears key when last receiver removed
-	n.Unsubscribe([]byte("b"), b2)
+	n.Unsubscribe([]byte("b"), &b2)
 	subs = n.Subscriptions()
 	if !checkSubs(subs, [][]byte{[]byte("a")}) {
 		t.Errorf("Incorrect subscriptions!")
@@ -117,8 +118,8 @@ func TestEventDelivery(t *testing.T) {
 	// nodes[1].log = lb
 
 	// set subscriptions
-	fooReceiver := make(chan []byte)
-	nodes[0].Subscribe([]byte("foo"), fooReceiver)
+	var fooReceiver bytes.Buffer
+	nodes[0].Subscribe([]byte("foo"), &fooReceiver)
 
 	// start nodes and wait for filters to propagate
 	for _, node := range nodes {
@@ -128,15 +129,10 @@ func TestEventDelivery(t *testing.T) {
 
 	// create event
 	nodes[1].Publish([]byte("foo"), []byte("foodata"))
+	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*2))
 
-	timeout := time.Duration(cfg.PropagationDelay*2) * time.Millisecond
-	select {
-	case <-time.After(timeout):
-		t.Errorf("Timeout: Event not received!")
-	case data := <-fooReceiver:
-		if !reflect.DeepEqual(data, []byte("foodata")) {
-			t.Errorf("Incorrect event data!")
-		}
+	if !reflect.DeepEqual(fooReceiver.Bytes(), []byte("foodata")) {
+		t.Errorf("Incorrect event data!")
 	}
 
 	// stop nodes and logger

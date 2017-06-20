@@ -6,6 +6,8 @@ import (
 	"github.com/willf/bloom"
 )
 
+// FIXME always binary.BigEndian
+
 func serializeFilter(f *bloom.BloomFilter) []byte {
 	data, err := f.GobEncode()
 	mustNotError(err)

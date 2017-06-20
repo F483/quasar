@@ -1,6 +1,11 @@
 package quasar
 
-import "math/rand"
+import (
+	"fmt"
+	//"io/ioutil"
+	"math"
+	"math/rand"
+)
 
 type mockNetwork struct {
 	peers          []*pubkey
@@ -95,3 +100,40 @@ func NewMockNetwork(l *Logger, c *Config, size int) []*Node {
 
 	return nodes
 }
+
+func randomTopic() []byte {
+	// vaguely based on twitter distribution
+	x := rand.NormFloat64() * rand.NormFloat64() * rand.NormFloat64()
+	return []byte(fmt.Sprintf("%d", int(math.Abs(x*10000.0))))
+}
+
+/*
+func RunSimulation(l *Logger, c *Config, size int, subsPerNode int) (map[hash160digest][]byte, map[hash160digest]int) {
+
+	topics := make(map[hash160digest][]byte) // digest -> topic
+	subcnt := make(map[hash160digest]int)    // digest -> sub count
+	// receivers := make(map[hash160digest]chan [][]byte)
+	nodes := NewMockNetwork(l, c, size)
+
+	// add subscriptions
+	for node := range nodes {
+		for i := 0; i < subsPerNode; i++ {
+
+			// update topics/subcnt
+			t := randomTopic()
+			d := hash160(t)
+			if cnt, ok := subcnt[d]; ok {
+				subcnt[d] = cnt + 1
+			} else {
+				topics[d] = t
+				subcnt[d] = 1
+			}
+
+			node.Subscribe(t, nil) // FIXME
+			// node.Subscribe(t, ioutil.Disgard)
+		}
+	}
+
+	return topics, subcnt
+}
+*/

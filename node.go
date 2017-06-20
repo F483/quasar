@@ -2,17 +2,16 @@ package quasar
 
 import (
 	"github.com/f483/dejavu"
+	"io"
 	"math/rand"
 	"sync"
 	"time"
 )
 
-// FIXME use io.Reader and io.Writer where possible
-
 // Node holds the quasar pubsup state
 type Node struct {
 	net               networkOverlay
-	subscribers       map[hash160digest][]chan []byte
+	subscribers       map[hash160digest][]io.Writer
 	topics            map[hash160digest][]byte
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
@@ -39,7 +38,7 @@ func newNode(n networkOverlay, l *Logger, c *Config) *Node {
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Node{
 		net:               n,
-		subscribers:       make(map[hash160digest][]chan []byte),
+		subscribers:       make(map[hash160digest][]io.Writer),
 		topics:            make(map[hash160digest][]byte),
 		mutex:             new(sync.RWMutex),
 		peers:             make(map[pubkey]*peerData),
@@ -99,9 +98,9 @@ func (n *Node) isDuplicate(e *event) bool {
 	return n.history.Witness(append(e.topicDigest[:20], e.message...))
 }
 
-func (n *Node) deliver(receivers []chan []byte, e *event) {
+func (n *Node) deliver(receivers []io.Writer, e *event) {
 	for _, receiver := range receivers {
-		receiver <- e.message
+		receiver.Write(e.message)
 	}
 }
 
@@ -270,13 +269,13 @@ func (n *Node) Stop() {
 }
 
 // Subscribe provided message receiver channel to given topic.
-func (n *Node) Subscribe(topic []byte, receiver chan []byte) {
+func (n *Node) Subscribe(topic []byte, receiver io.Writer) {
 	// TODO validate input
 	digest := hash160(topic)
 	n.mutex.Lock()
 	receivers, ok := n.subscribers[digest]
 	if ok != true { // new subscription
-		n.subscribers[digest] = []chan []byte{receiver}
+		n.subscribers[digest] = []io.Writer{receiver}
 		n.topics[digest] = topic
 	} else { // append to existing subscribers
 		n.subscribers[digest] = append(receivers, receiver)
@@ -287,7 +286,7 @@ func (n *Node) Subscribe(topic []byte, receiver chan []byte) {
 // Unsubscribe message receiver channel from topic. If nil receiver
 // channel is provided all message receiver channels for given topic
 // will be removed.
-func (n *Node) Unsubscribe(topic []byte, receiver chan []byte) {
+func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 	// TODO validate input
 
 	digest := hash160(topic)
@@ -315,10 +314,10 @@ func (n *Node) Unsubscribe(topic []byte, receiver chan []byte) {
 }
 
 // Subscribers retruns message receivers for given topic.
-func (n *Node) Subscribers(topic []byte) []chan []byte {
+func (n *Node) Subscribers(topic []byte) []io.Writer {
 	// TODO validate input
 	digest := hash160(topic)
-	results := []chan []byte{}
+	results := []io.Writer{}
 	n.mutex.RLock()
 	if receivers, ok := n.subscribers[digest]; ok {
 		results = append(results, receivers...)
