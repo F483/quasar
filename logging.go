@@ -1,6 +1,11 @@
 package quasar
 
-import "fmt"
+import (
+	"fmt"
+	// "time"
+)
+
+// FIXME dont export logging
 
 // LogUpdate used for monitoring internal filter updates.
 type LogUpdate struct {
@@ -56,7 +61,7 @@ func (l *Logger) updateSent(n *Node, i uint32, f []byte, t *pubkey) {
 	if l != nil && l.UpdatesSent != nil {
 		var id *pubkey
 		if n != nil {
-			idv := n.net.Id()
+			idv := n.net.id()
 			id = &idv
 		}
 		u := &peerUpdate{peer: id, index: i, filter: f}
@@ -198,6 +203,7 @@ func LogToConsole(prefix string, stopLogging chan bool) *Logger {
 				go fmt.Println("Stop logging received!")
 				return
 			}
+			// time.Sleep(time.Millisecond)
 		}
 	}()
 	return l

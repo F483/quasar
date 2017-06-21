@@ -4,6 +4,9 @@
 *.so
 *.dylib
 
+# Profiling data
+*.prof
+
 # Test binary, build with `go test -c`
 *.test
 

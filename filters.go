@@ -6,7 +6,7 @@ import (
 	"github.com/willf/bloom"
 )
 
-// FIXME always binary.BigEndian
+// FIXME always binary.BigEndian?
 
 func serializeFilter(f *bloom.BloomFilter) []byte {
 	data, err := f.GobEncode()
@@ -41,6 +41,16 @@ func newFilters(c *Config) [][]byte {
 	return filters
 }
 
+func newFilterFromDigests(c *Config, digests ...hash160digest) []byte {
+	m := c.FiltersM
+	k := c.FiltersK
+	bf := bloom.New(uint(m), uint(k))
+	for _, digest := range digests {
+		bf.Add(digest[:])
+	}
+	return serializeFilter(bf)
+}
+
 func filterInsert(f []byte, c *Config, datas ...[]byte) []byte {
 	ds := make([]hash160digest, len(datas), len(datas))
 	for i, data := range datas {
@@ -62,18 +72,13 @@ func mergeFilters(fs ...[]byte) []byte {
 		return nil
 	}
 	size := len(fs[0])
-	result := make([]byte, size, size)
-	errMsg := "Filter m missmatch: %d != %d"
+	m := make([]byte, size, size)
 	for _, f := range fs {
-		mustBeTrue(size == len(f), errMsg, size, len(f))
-
-		m := make([]byte, size, size)
 		for i := 0; i < len(m); i++ {
-			m[i] = result[i] | f[i]
+			m[i] = m[i] | f[i]
 		}
-		result = m
 	}
-	return result
+	return m
 }
 
 func filterContains(f []byte, c *Config, data []byte) bool {

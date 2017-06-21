@@ -13,8 +13,10 @@ func makePeerTimestamp() uint64 {
 
 func peerDataExpired(p *peerData, c *Config) bool {
 	now := makePeerTimestamp()
-	for _, timestamp := range p.timestamps {
-		if timestamp >= (now - c.FilterFreshness) {
+	size := len(p.timestamps)
+	oldest := now - c.FilterFreshness
+	for i := 0; i < size; i++ {
+		if p.timestamps[i] >= oldest {
 			return false
 		}
 	}

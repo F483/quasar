@@ -2,7 +2,7 @@ package quasar
 
 import "testing"
 
-func TestFilters(t *testing.T) {
+func TestFiltersBulk(t *testing.T) {
 	cfg := &Config{
 		DefaultEventTTL:  1024,
 		FilterFreshness:  180,

@@ -10,10 +10,18 @@ import (
 )
 
 type mockNetwork struct {
-	peers          []*pubkey
-	connections    map[pubkey][]pubkey
+	connections    map[pubkey][]*pubkey
 	updateChannels map[pubkey]chan *peerUpdate
 	eventChannels  map[pubkey]chan *event
+}
+
+func (mn mockNetwork) connected(a *pubkey, b *pubkey) bool {
+	for _, x := range mn.connections[*a] {
+		if *x == *b {
+			return true
+		}
+	}
+	return false
 }
 
 type mockOverlay struct {
@@ -21,36 +29,40 @@ type mockOverlay struct {
 	net  *mockNetwork
 }
 
-func (mo *mockOverlay) Id() pubkey {
+func (mo *mockOverlay) id() pubkey {
 	return mo.peer
 }
 
-func (mo *mockOverlay) ConnectedPeers() []pubkey {
+func (mo *mockOverlay) connectedPeers() []*pubkey {
 	return mo.net.connections[mo.peer]
 }
 
-func (mo *mockOverlay) ReceivedEventChannel() chan *event {
+func (mo *mockOverlay) isConnected(peerId *pubkey) bool {
+	return mo.net.connected(&mo.peer, peerId)
+}
+
+func (mo *mockOverlay) receivedEventChannel() chan *event {
 	return mo.net.eventChannels[mo.peer]
 }
 
-func (mo *mockOverlay) ReceivedUpdateChannel() chan *peerUpdate {
+func (mo *mockOverlay) receivedUpdateChannel() chan *peerUpdate {
 	return mo.net.updateChannels[mo.peer]
 }
 
-func (mo *mockOverlay) SendEvent(id *pubkey, e *event) {
+func (mo *mockOverlay) sendEvent(id *pubkey, e *event) {
 	mo.net.eventChannels[*id] <- e
 }
 
-func (mo *mockOverlay) SendUpdate(id *pubkey, i uint32, filter []byte) {
+func (mo *mockOverlay) sendUpdate(id *pubkey, i uint32, filter []byte) {
 	u := &peerUpdate{peer: &mo.peer, index: i, filter: filter}
 	mo.net.updateChannels[*id] <- u
 }
 
-func (mo *mockOverlay) Start() {
+func (mo *mockOverlay) start() {
 
 }
 
-func (mo *mockOverlay) Stop() {
+func (mo *mockOverlay) stop() {
 
 }
 
@@ -58,42 +70,53 @@ func newMockNetwork(l *Logger, c *Config, size int) []*Node {
 
 	// TODO add chance of dropped package to args
 
+	// size must be even
 	peerCnt := 20
 	if peerCnt >= size {
 		peerCnt = size - 1
 	}
 
 	net := &mockNetwork{
-		peers:          make([]*pubkey, size, size),
-		connections:    make(map[pubkey][]pubkey),
+		connections:    make(map[pubkey][]*pubkey),
 		updateChannels: make(map[pubkey]chan *peerUpdate),
 		eventChannels:  make(map[pubkey]chan *event),
 	}
 
 	// create peers and channels
+	allPeerIds := make([]*pubkey, size, size)
 	for i := 0; i < size; i++ {
-		var peerId pubkey
-		rand.Read(peerId[:])
-		net.peers[i] = &peerId
-		net.updateChannels[peerId] = make(chan *peerUpdate)
-		net.eventChannels[peerId] = make(chan *event)
+		var id pubkey
+		rand.Read(id[:])
+		allPeerIds[i] = &id
+		net.connections[id] = make([]*pubkey, 0)
+		net.updateChannels[id] = make(chan *peerUpdate)
+		net.eventChannels[id] = make(chan *event)
 	}
 
-	// create connections
+	// create connections (symmetrical and unique)
 	for i := 0; i < size; i++ {
-		peerId := net.peers[i]
-		net.connections[*peerId] = make([]pubkey, peerCnt, peerCnt)
-		for j := 0; j < peerCnt; j++ {
-			// FIXME do not set self as peer
-			neighbour := net.peers[randIntnExcluding(len(net.peers), i)]
-			net.connections[*peerId][j] = *neighbour
+		id := allPeerIds[i]
+		for len(net.connections[*id]) < peerCnt {
+			j := rand.Intn(size) // random starting point
+			for {
+				oid := allPeerIds[j]
+				self := *oid == *id // dont link to self
+				full := len(net.connections[*oid]) == peerCnt
+				if self || full || net.connected(id, oid) {
+					j = (j + 1) % size // walk until candidate found
+					continue
+				}
+				net.connections[*id] = append(net.connections[*id], oid)
+				net.connections[*oid] = append(net.connections[*oid], id)
+				break
+			}
 		}
 	}
 
 	// create quasar nodes
 	nodes := make([]*Node, size, size)
-	for i := 0; i < size; i++ {
-		n := mockOverlay{peer: *net.peers[i], net: net}
+	for i, id := range allPeerIds {
+		n := mockOverlay{peer: *id, net: net}
 		nodes[i] = newNode(&n, l, c)
 	}
 
@@ -123,11 +146,17 @@ func calcCoverage(
 ) float64 {
 	expected := 0
 	reality := 0
-	for t, cnt := range pubcnt {
-		expected += subcnt[t] * cnt
+	// TODO account for duplicate delivery?
+	for t, pcnt := range pubcnt {
+		if scnt, ok := subcnt[t]; ok {
+			expected += pcnt * scnt
+		}
 	}
 	for _, cnt := range delivercnt {
 		reality += cnt
+	}
+	if expected == 0 {
+		return 1.0
 	}
 	return float64(reality) / float64(expected)
 }
@@ -167,7 +196,6 @@ func collectStats(
 	}
 	r := make(map[string]float64)
 	r["coverage"] = calcCoverage(subcnt, pubcnt, delivercnt)
-	fmt.Printf("coverage: %f\n", r["coverage"])
 	rc <- r
 }
 
@@ -183,6 +211,7 @@ func Simulate(c *Config, size int, pubs int, subs int) map[string]float64 {
 		for i := 0; i < subs; i++ {
 			t := randomTopic()
 			d := hash160(t)
+			// FIXME what about duplicate subs per node?
 			if cnt, ok := subcnt[d]; ok {
 				subcnt[d] = cnt + 1
 			} else {
@@ -204,29 +233,35 @@ func Simulate(c *Config, size int, pubs int, subs int) map[string]float64 {
 	go collectStats(l, topics, subcnt, stop, results)
 
 	// wait for filters to propagate
-	delay := c.PropagationDelay * uint64(c.FiltersDepth) * 3
-	time.Sleep(time.Duration(delay) * time.Millisecond)
+	delay := time.Duration(c.PropagationDelay * uint64(c.FiltersDepth))
+	fmt.Printf("Waiting for filter propagation: %dms\n", delay)
+	time.Sleep(delay * time.Millisecond)
+
+	delay = time.Duration(delay / 140)
+	pn := time.Duration(size * pubs)
+	fmt.Printf("Publish delay: %d * %dms => %dms\n", pn, delay, pn*delay)
 
 	// create events
 	for _, node := range nodes {
 		for i := 0; i < pubs; i++ {
 			t := randomTopic()
-			d := make([]byte, 20, 20)
+			d := make([]byte, 10, 10)
 			rand.Read(d)
 			go node.Publish(t, d)
+
+			// let cpu chill
+			time.Sleep(time.Duration(delay) * time.Millisecond)
 		}
 	}
-
-	// wait for events to propagate
-	delay = uint64(c.DefaultEventTTL) * c.PropagationDelay * uint64(size)
-	fmt.Printf("waiting for event propagation: %dms\n", delay/10)
-	time.Sleep(time.Duration(delay/10) * time.Millisecond)
 
 	// stop nodes
 	stop <- true
 	for _, node := range nodes {
 		go node.Stop()
 	}
+
+	// let things stop
+	// time.Sleep(time.Duration(1000) * time.Millisecond)
 
 	return <-results
 }

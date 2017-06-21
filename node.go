@@ -51,18 +51,9 @@ func newNode(n networkOverlay, l *Logger, c *Config) *Node {
 	}
 }
 
-func (n *Node) isConnected(peerId *pubkey) bool {
-	for _, connectedPeerId := range n.net.ConnectedPeers() {
-		if connectedPeerId == *peerId {
-			return true
-		}
-	}
-	return false
-}
-
 func (n *Node) processUpdate(u *peerUpdate) {
 	go n.log.updateReceived(n, u)
-	if n.isConnected(u.peer) == false {
+	if n.net.isConnected(u.peer) == false {
 		go n.log.updateFail(n, u)
 		return // ignore to prevent memory attack
 	}
@@ -104,28 +95,39 @@ func (n *Node) deliver(receivers []io.Writer, e *event) {
 	}
 }
 
+func (n *Node) subscriptions() []hash160digest {
+	digests := make([]hash160digest, 0)
+	for digest := range n.subscribers {
+		digests = append(digests, digest)
+	}
+	return digests
+}
+
 // Algorithm 1 from the quasar paper.
 func (n *Node) sendUpdates() {
 	n.mutex.RLock()
 	filters := newFilters(n.cfg)
-	for digest := range n.subscribers {
-		filters[0] = filterInsertDigest(filters[0], n.cfg, digest)
-	}
-	pubkey := n.net.Id()
-	filters[0] = filterInsert(filters[0], n.cfg, pubkey[:])
+	pubkey := n.net.id()
+	digests := n.subscriptions()
+	digests = append(digests, hash160(pubkey[:]))
+	filters[0] = newFilterFromDigests(n.cfg, digests...)
 	for _, data := range n.peers {
-		if peerDataExpired(data, n.cfg) {
-			continue
-		}
+		// XXX better if only expiredPeerGC takes care of it?
+		// if peerDataExpired(data, n.cfg) {
+		// 		continue
+		// 	}
 		for i := 1; uint32(i) < n.cfg.FiltersDepth; i++ {
-			filters[i] = mergeFilters(filters[i], data.filters[i-1])
+			size := int(n.cfg.FiltersM / 8)
+			for j := 0; j < size; j++ { // inline merge for performance
+				filters[i][j] = filters[i][j] | data.filters[i-1][j]
+			}
 		}
 	}
-	for _, id := range n.net.ConnectedPeers() {
+	for _, id := range n.net.connectedPeers() {
 		for i := 0; uint32(i) < (n.cfg.FiltersDepth - 1); i++ {
 			// top filter never sent as not used by peers
-			go n.net.SendUpdate(&id, uint32(i), filters[i])
-			go n.log.updateSent(n, uint32(i), filters[i], &id)
+			go n.net.sendUpdate(id, uint32(i), filters[i])
+			go n.log.updateSent(n, uint32(i), filters[i], id)
 		}
 	}
 	n.mutex.RUnlock()
@@ -134,7 +136,7 @@ func (n *Node) sendUpdates() {
 // Algorithm 2 from the quasar paper.
 func (n *Node) route(e *event) {
 	n.mutex.RLock()
-	id := n.net.Id()
+	id := n.net.id()
 	if n.isDuplicate(e) {
 		go n.log.eventDropDuplicate(n, e)
 		n.mutex.RUnlock()
@@ -144,9 +146,9 @@ func (n *Node) route(e *event) {
 		n.log.eventDeliver(n, e)
 		n.deliver(receivers, e)
 		e.publishers = append(e.publishers, id)
-		for _, peerId := range n.net.ConnectedPeers() {
-			go n.net.SendEvent(&peerId, e)
-			go n.log.eventRouteDirect(n, e, &peerId)
+		for _, peerId := range n.net.connectedPeers() {
+			go n.net.sendEvent(peerId, e)
+			go n.log.eventRouteDirect(n, e, peerId)
 		}
 		n.mutex.RUnlock()
 		return
@@ -168,7 +170,7 @@ func (n *Node) route(e *event) {
 					}
 				}
 				if !negRt {
-					go n.net.SendEvent(&peerId, e)
+					go n.net.sendEvent(&peerId, e)
 					go n.log.eventRouteWell(n, e, &peerId)
 					n.mutex.RUnlock()
 					return
@@ -178,29 +180,28 @@ func (n *Node) route(e *event) {
 	}
 	peerId := n.randomPeer()
 	if peerId != nil {
-		go n.net.SendEvent(peerId, e)
+		go n.net.sendEvent(peerId, e)
 		go n.log.eventRouteRandom(n, e, peerId)
 	}
 	n.mutex.RUnlock()
 }
 
 func (n *Node) randomPeer() *pubkey {
-	peers := n.net.ConnectedPeers()
+	peers := n.net.connectedPeers()
 	if len(peers) == 0 {
 		return nil
 	}
-	peerId := peers[rand.Intn(len(peers))]
-	return &peerId
+	return peers[rand.Intn(len(peers))]
 }
 
 func (n *Node) dispatchInput() {
 	for {
 		select {
-		case peerUpdate := <-n.net.ReceivedUpdateChannel():
+		case peerUpdate := <-n.net.receivedUpdateChannel():
 			if validUpdate(peerUpdate, n.cfg) {
 				go n.processUpdate(peerUpdate)
 			}
-		case event := <-n.net.ReceivedEventChannel():
+		case event := <-n.net.receivedEventChannel():
 			if validEvent(event) {
 				go n.log.eventReceived(n, event)
 				go n.route(event)
@@ -226,7 +227,7 @@ func (n *Node) removeExpiredPeers() {
 }
 
 func (n *Node) expiredPeerGC() {
-	delay := time.Duration(1) * time.Millisecond
+	delay := time.Duration(n.cfg.FilterFreshness/2) * time.Millisecond
 	for {
 		select {
 		case <-time.After(delay):
@@ -251,7 +252,7 @@ func (n *Node) propagateFilters() {
 
 // Start quasar system
 func (n *Node) Start() {
-	n.net.Start()
+	n.net.start()
 	n.stopDispatcher = make(chan bool)
 	n.stopPropagation = make(chan bool)
 	n.stopExpiredPeerGC = make(chan bool)
@@ -262,7 +263,7 @@ func (n *Node) Start() {
 
 // Stop quasar system
 func (n *Node) Stop() {
-	n.net.Stop()
+	n.net.stop()
 	n.stopDispatcher <- true
 	n.stopPropagation <- true
 	n.stopExpiredPeerGC <- true
