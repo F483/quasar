@@ -7,7 +7,7 @@ import (
 
 // TODO test nil channels
 
-func sendUpdateLogEntries(l *Logger, allSent chan bool) {
+func sendUpdateLogEntries(l *logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.updateSent(nil, 0, nil, nil)
 	l.updateReceived(nil, nil)
@@ -17,7 +17,7 @@ func sendUpdateLogEntries(l *Logger, allSent chan bool) {
 	allSent <- true
 }
 
-func sendEventLogEntries(l *Logger, allSent chan bool) {
+func sendEventLogEntries(l *logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
 	l.eventPublished(nil, nil)
 	l.eventReceived(nil, nil)
@@ -40,7 +40,7 @@ func setReceived(b *bool, t *testing.T) {
 
 func TestUpdateLogging(t *testing.T) {
 
-	l := NewLogger(10)
+	l := newLogger(10)
 	allSent := make(chan bool)
 	go sendUpdateLogEntries(l, allSent)
 
@@ -52,13 +52,13 @@ func TestUpdateLogging(t *testing.T) {
 	exitLoop := false
 	for !exitLoop {
 		select {
-		case <-l.UpdatesSent:
+		case <-l.updatesSent:
 			setReceived(&sent, t)
-		case <-l.UpdatesReceived:
+		case <-l.updatesReceived:
 			setReceived(&received, t)
-		case <-l.UpdatesSuccess:
+		case <-l.updatesSuccess:
 			setReceived(&success, t)
-		case <-l.UpdatesFail:
+		case <-l.updatesFail:
 			setReceived(&fail, t)
 		case <-allSent:
 			exitLoop = true
@@ -73,25 +73,25 @@ func TestUpdateLogging(t *testing.T) {
 func collectEventLogs(published *bool, received *bool, deliver *bool,
 	dropDuplicate *bool, dropTTL *bool, routeDirect *bool,
 	routeWell *bool, routeRandom *bool, allSent chan bool,
-	l *Logger, t *testing.T) {
+	l *logger, t *testing.T) {
 	exitLoop := false
 	for !exitLoop {
 		select {
-		case <-l.EventsPublished:
+		case <-l.eventsPublished:
 			setReceived(published, t)
-		case <-l.EventsReceived:
+		case <-l.eventsReceived:
 			setReceived(received, t)
-		case <-l.EventsDeliver:
+		case <-l.eventsDeliver:
 			setReceived(deliver, t)
-		case <-l.EventsDropDuplicate:
+		case <-l.eventsDropDuplicate:
 			setReceived(dropDuplicate, t)
-		case <-l.EventsDropTTL:
+		case <-l.eventsDropTTL:
 			setReceived(dropTTL, t)
-		case <-l.EventsRouteDirect:
+		case <-l.eventsRouteDirect:
 			setReceived(routeDirect, t)
-		case <-l.EventsRouteWell:
+		case <-l.eventsRouteWell:
 			setReceived(routeWell, t)
-		case <-l.EventsRouteRandom:
+		case <-l.eventsRouteRandom:
 			setReceived(routeRandom, t)
 		case <-allSent:
 			exitLoop = true
@@ -101,7 +101,7 @@ func collectEventLogs(published *bool, received *bool, deliver *bool,
 
 func TestEventLogging(t *testing.T) {
 
-	l := NewLogger(10)
+	l := newLogger(10)
 	allSent := make(chan bool)
 	go sendEventLogEntries(l, allSent)
 

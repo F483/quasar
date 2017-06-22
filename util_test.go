@@ -12,8 +12,8 @@ func TestMustNotBeNilStructPtr(t *testing.T) {
 		}
 	}()
 
-	var l *Logger
-	mustNotBeNil(l)
+	var i *int
+	mustNotBeNil(i)
 }
 
 func TestMustNotBeNilDirect(t *testing.T) {

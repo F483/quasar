@@ -15,7 +15,7 @@ type Node struct {
 	topics            map[hash160digest][]byte
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
-	log               *Logger
+	log               *logger
 	history           dejavu.DejaVu // memory of past events
 	cfg               *Config
 	stopDispatcher    chan bool
@@ -29,12 +29,7 @@ func New() *Node {
 	return newNode(nil, nil, &StandardConfig)
 }
 
-// NewCustom create instance with custom logging/setup, for testing only.
-func NewCustom(l *Logger, c *Config) *Node {
-	return newNode(nil, l, c)
-}
-
-func newNode(n networkOverlay, l *Logger, c *Config) *Node {
+func newNode(n networkOverlay, l *logger, c *Config) *Node {
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Node{
 		net:               n,

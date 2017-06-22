@@ -6,6 +6,7 @@ import (
 	"github.com/willf/bloom"
 )
 
+// FIXME just using sha256 for digest faster?
 // FIXME always binary.BigEndian?
 
 func serializeFilter(f *bloom.BloomFilter) []byte {

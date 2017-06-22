@@ -66,7 +66,7 @@ func (mo *mockOverlay) stop() {
 
 }
 
-func newMockNetwork(l *Logger, c *Config, size int) []*Node {
+func newMockNetwork(l *logger, c *Config, size int) []*Node {
 
 	// TODO add chance of dropped package to args
 
@@ -94,8 +94,7 @@ func newMockNetwork(l *Logger, c *Config, size int) []*Node {
 	}
 
 	// create connections (symmetrical and unique)
-	for i := 0; i < size; i++ {
-		id := allPeerIds[i]
+	for _, id := range allPeerIds {
 		for len(net.connections[*id]) < peerCnt {
 			j := rand.Intn(size) // random starting point
 			for {
@@ -162,7 +161,7 @@ func calcCoverage(
 }
 
 func collectStats(
-	l *Logger,
+	l *logger,
 	topics map[hash160digest][]byte,
 	subcnt map[hash160digest]int,
 	stop chan bool, // signal stop collection and compile results
@@ -176,20 +175,20 @@ func collectStats(
 	stopCollection := false
 	for !stopCollection {
 		select {
-		case <-l.UpdatesSent:
-		case <-l.UpdatesReceived:
-		case <-l.UpdatesSuccess:
-		case <-l.UpdatesFail:
-		case le := <-l.EventsPublished:
+		case <-l.updatesSent:
+		case <-l.updatesReceived:
+		case <-l.updatesSuccess:
+		case <-l.updatesFail:
+		case le := <-l.eventsPublished:
 			updateCnt(mutex, pubcnt, le.entry.topicDigest)
-		case <-l.EventsReceived:
-		case le := <-l.EventsDeliver:
+		case <-l.eventsReceived:
+		case le := <-l.eventsDeliver:
 			updateCnt(mutex, delivercnt, le.entry.topicDigest)
-		case <-l.EventsDropDuplicate:
-		case <-l.EventsDropTTL:
-		case <-l.EventsRouteDirect:
-		case <-l.EventsRouteWell:
-		case <-l.EventsRouteRandom:
+		case <-l.eventsDropDuplicate:
+		case <-l.eventsDropTTL:
+		case <-l.eventsRouteDirect:
+		case <-l.eventsRouteWell:
+		case <-l.eventsRouteRandom:
 		case <-stop:
 			stopCollection = true
 		}
@@ -201,7 +200,7 @@ func collectStats(
 
 func Simulate(c *Config, size int, pubs int, subs int) map[string]float64 {
 
-	l := NewLogger(1024)
+	l := newLogger(1024)
 	nodes := newMockNetwork(l, c, size)
 	topics := make(map[hash160digest][]byte) // digest -> topic
 	subcnt := make(map[hash160digest]int)    // digest -> sub count
