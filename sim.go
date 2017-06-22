@@ -66,7 +66,7 @@ func (mo *mockOverlay) stop() {
 
 }
 
-func newMockNetwork(l *logger, c *Config, size int) []*Node {
+func newMockNetwork(l *logger, cfg *Config, size int) []*Node {
 
 	// TODO add chance of dropped package to args
 
@@ -95,15 +95,18 @@ func newMockNetwork(l *logger, c *Config, size int) []*Node {
 
 	// create connections (symmetrical and unique)
 	for _, id := range allPeerIds {
-		for len(net.connections[*id]) < peerCnt {
-			j := rand.Intn(size) // random starting point
-			for {
-				oid := allPeerIds[j]
+		exausted := false
+		for len(net.connections[*id]) < peerCnt && !exausted {
+			start := rand.Intn(size)    // random starting point
+			for i := 0; i < size; i++ { // try peers once then give up
+				oid := allPeerIds[(start+i)%size]
 				self := *oid == *id // dont link to self
 				full := len(net.connections[*oid]) == peerCnt
 				if self || full || net.connected(id, oid) {
-					j = (j + 1) % size // walk until candidate found
-					continue
+					if i == size-1 {
+						exausted = true // no more connections possible
+					}
+					continue // go to next candidate
 				}
 				net.connections[*id] = append(net.connections[*id], oid)
 				net.connections[*oid] = append(net.connections[*oid], id)
@@ -116,7 +119,7 @@ func newMockNetwork(l *logger, c *Config, size int) []*Node {
 	nodes := make([]*Node, size, size)
 	for i, id := range allPeerIds {
 		n := mockOverlay{peer: *id, net: net}
-		nodes[i] = newNode(&n, l, c)
+		nodes[i] = newNode(&n, l, cfg)
 	}
 
 	return nodes
@@ -198,10 +201,13 @@ func collectStats(
 	rc <- r
 }
 
-func Simulate(c *Config, size int, pubs int, subs int) map[string]float64 {
+// Simulate network behaviour for given configuration, size,
+// events published per node, topics subscribed to by node.
+// Returns map with resulting statistics.
+func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 
 	l := newLogger(1024)
-	nodes := newMockNetwork(l, c, size)
+	nodes := newMockNetwork(l, cfg, size)
 	topics := make(map[hash160digest][]byte) // digest -> topic
 	subcnt := make(map[hash160digest]int)    // digest -> sub count
 
@@ -232,7 +238,7 @@ func Simulate(c *Config, size int, pubs int, subs int) map[string]float64 {
 	go collectStats(l, topics, subcnt, stop, results)
 
 	// wait for filters to propagate
-	delay := time.Duration(c.PropagationDelay * uint64(c.FiltersDepth))
+	delay := time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth))
 	fmt.Printf("Waiting for filter propagation: %dms\n", delay)
 	time.Sleep(delay * time.Millisecond)
 
