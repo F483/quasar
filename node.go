@@ -90,10 +90,10 @@ func (n *Node) deliver(receivers []io.Writer, e *event) {
 	}
 }
 
-func (n *Node) subscriptions() []hash160digest {
-	digests := make([]hash160digest, 0)
+func (n *Node) subscriptions() []*hash160digest {
+	digests := make([]*hash160digest, 0)
 	for digest := range n.subscribers {
-		digests = append(digests, digest)
+		digests = append(digests, &digest)
 	}
 	return digests
 }
@@ -103,8 +103,8 @@ func (n *Node) sendUpdates() {
 	n.mutex.RLock()
 	filters := newFilters(n.cfg)
 	pubkey := n.net.id()
-	digests := n.subscriptions()
-	digests = append(digests, hash160(pubkey[:]))
+	pubkeyDigest := hash160(pubkey[:])
+	digests := append(n.subscriptions(), &pubkeyDigest)
 	filters[0] = newFilterFromDigests(n.cfg, digests...)
 	for _, data := range n.peers {
 		// XXX better if only expiredPeerGC takes care of it?
@@ -140,7 +140,8 @@ func (n *Node) route(e *event) {
 	if receivers, ok := n.subscribers[*e.topicDigest]; ok {
 		n.log.eventDeliver(n, e)
 		n.deliver(receivers, e)
-		e.publishers = append(e.publishers, id)
+		digest := hash160(id[:])
+		e.publishers = append(e.publishers, &digest)
 		for _, peerId := range n.net.connectedPeers() {
 			go n.net.sendEvent(peerId, e)
 			go n.log.eventRouteDirect(n, e, peerId)
@@ -157,10 +158,10 @@ func (n *Node) route(e *event) {
 	for i := 0; uint32(i) < n.cfg.FiltersDepth; i++ {
 		for peerId, data := range n.peers {
 			f := data.filters[i]
-			if filterContainsDigest(f, n.cfg, *e.topicDigest) {
+			if filterContainsDigest(f, n.cfg, e.topicDigest) {
 				negRt := false
 				for _, publisher := range e.publishers {
-					if filterContains(f, n.cfg, publisher[:]) {
+					if filterContainsDigest(f, n.cfg, publisher) {
 						negRt = true
 					}
 				}

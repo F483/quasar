@@ -51,7 +51,7 @@ func newLogger(bufsize int) *logger {
 }
 
 func (l *logger) updateSent(n *Node, i uint32, f []byte, t *pubkey) {
-	if l != nil && l.updatesSent != nil {
+	if l != nil {
 		var id *pubkey
 		if n != nil {
 			idv := n.net.id()
@@ -65,7 +65,7 @@ func (l *logger) updateSent(n *Node, i uint32, f []byte, t *pubkey) {
 }
 
 func (l *logger) updateReceived(n *Node, u *peerUpdate) {
-	if l != nil && l.updatesReceived != nil {
+	if l != nil {
 		l.updatesReceived <- &logUpdate{
 			node: n, entry: u, target: nil,
 		}
@@ -73,7 +73,7 @@ func (l *logger) updateReceived(n *Node, u *peerUpdate) {
 }
 
 func (l *logger) updateSuccess(n *Node, u *peerUpdate) {
-	if l != nil && l.updatesSuccess != nil {
+	if l != nil {
 		l.updatesSuccess <- &logUpdate{
 			node: n, entry: u, target: nil,
 		}
@@ -81,7 +81,7 @@ func (l *logger) updateSuccess(n *Node, u *peerUpdate) {
 }
 
 func (l *logger) updateFail(n *Node, u *peerUpdate) {
-	if l != nil && l.updatesFail != nil {
+	if l != nil {
 		l.updatesFail <- &logUpdate{
 			node: n, entry: u, target: nil,
 		}
@@ -89,7 +89,7 @@ func (l *logger) updateFail(n *Node, u *peerUpdate) {
 }
 
 func (l *logger) eventPublished(n *Node, e *event) {
-	if l != nil && l.eventsPublished != nil {
+	if l != nil {
 		l.eventsPublished <- &logEvent{
 			node: n, entry: e, target: nil,
 		}
@@ -97,7 +97,7 @@ func (l *logger) eventPublished(n *Node, e *event) {
 }
 
 func (l *logger) eventReceived(n *Node, e *event) {
-	if l != nil && l.eventsReceived != nil {
+	if l != nil {
 		l.eventsReceived <- &logEvent{
 			node: n, entry: e, target: nil,
 		}
@@ -105,7 +105,7 @@ func (l *logger) eventReceived(n *Node, e *event) {
 }
 
 func (l *logger) eventDeliver(n *Node, e *event) {
-	if l != nil && l.eventsDeliver != nil {
+	if l != nil {
 		l.eventsDeliver <- &logEvent{
 			node: n, entry: e, target: nil,
 		}
@@ -113,7 +113,7 @@ func (l *logger) eventDeliver(n *Node, e *event) {
 }
 
 func (l *logger) eventDropDuplicate(n *Node, e *event) {
-	if l != nil && l.eventsDropDuplicate != nil {
+	if l != nil {
 		l.eventsDropDuplicate <- &logEvent{
 			node: n, entry: e, target: nil,
 		}
@@ -121,7 +121,7 @@ func (l *logger) eventDropDuplicate(n *Node, e *event) {
 }
 
 func (l *logger) eventDropTTL(n *Node, e *event) {
-	if l != nil && l.eventsDropTTL != nil {
+	if l != nil {
 		l.eventsDropTTL <- &logEvent{
 			node: n, entry: e, target: nil,
 		}
@@ -129,7 +129,7 @@ func (l *logger) eventDropTTL(n *Node, e *event) {
 }
 
 func (l *logger) eventRouteDirect(n *Node, e *event, t *pubkey) {
-	if l != nil && l.eventsRouteDirect != nil {
+	if l != nil {
 		l.eventsRouteDirect <- &logEvent{
 			node: n, entry: e, target: t,
 		}
@@ -137,7 +137,7 @@ func (l *logger) eventRouteDirect(n *Node, e *event, t *pubkey) {
 }
 
 func (l *logger) eventRouteWell(n *Node, e *event, t *pubkey) {
-	if l != nil && l.eventsRouteWell != nil {
+	if l != nil {
 		l.eventsRouteWell <- &logEvent{
 			node: n, entry: e, target: t,
 		}
@@ -145,7 +145,7 @@ func (l *logger) eventRouteWell(n *Node, e *event, t *pubkey) {
 }
 
 func (l *logger) eventRouteRandom(n *Node, e *event, t *pubkey) {
-	if l != nil && l.eventsRouteRandom != nil {
+	if l != nil {
 		l.eventsRouteRandom <- &logEvent{
 			node: n, entry: e, target: t,
 		}

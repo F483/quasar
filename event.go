@@ -3,7 +3,7 @@ package quasar
 type event struct {
 	topicDigest *hash160digest
 	message     []byte
-	publishers  []pubkey
+	publishers  []*hash160digest
 	ttl         uint32
 }
 
@@ -18,7 +18,7 @@ func newEvent(topic []byte, message []byte, ttl uint32) *event {
 	return &event{
 		topicDigest: &digest,
 		message:     message,
-		publishers:  []pubkey{},
+		publishers:  []*hash160digest{},
 		ttl:         ttl,
 	}
 }

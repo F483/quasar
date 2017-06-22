@@ -171,8 +171,9 @@ func collectStats(
 	rc chan map[string]float64, // results channel
 ) {
 
-	mutex := new(sync.Mutex)
-	pubcnt := make(map[hash160digest]int)
+	publishmutex := new(sync.Mutex)
+	publishcnt := make(map[hash160digest]int)
+	delivermutex := new(sync.Mutex)
 	delivercnt := make(map[hash160digest]int)
 
 	stopCollection := false
@@ -183,10 +184,10 @@ func collectStats(
 		case <-l.updatesSuccess:
 		case <-l.updatesFail:
 		case le := <-l.eventsPublished:
-			updateCnt(mutex, pubcnt, le.entry.topicDigest)
+			updateCnt(publishmutex, publishcnt, le.entry.topicDigest)
 		case <-l.eventsReceived:
 		case le := <-l.eventsDeliver:
-			updateCnt(mutex, delivercnt, le.entry.topicDigest)
+			updateCnt(delivermutex, delivercnt, le.entry.topicDigest)
 		case <-l.eventsDropDuplicate:
 		case <-l.eventsDropTTL:
 		case <-l.eventsRouteDirect:
@@ -197,12 +198,12 @@ func collectStats(
 		}
 	}
 	r := make(map[string]float64)
-	r["coverage"] = calcCoverage(subcnt, pubcnt, delivercnt)
+	r["coverage"] = calcCoverage(subcnt, publishcnt, delivercnt)
 	rc <- r
 }
 
 // Simulate network behaviour for given configuration, size,
-// events published per node, topics subscribed to by node.
+// events published, topics subscribed to by node.
 // Returns map with resulting statistics.
 func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 
@@ -242,21 +243,24 @@ func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 	fmt.Printf("Waiting for filter propagation: %dms\n", delay)
 	time.Sleep(delay * time.Millisecond)
 
-	delay = time.Duration(delay / 140)
-	pn := time.Duration(size * pubs)
+	delay = time.Duration(delay / 8)
+	pn := time.Duration(pubs)
 	fmt.Printf("Publish delay: %d * %dms => %dms\n", pn, delay, pn*delay)
 
 	// create events
-	for _, node := range nodes {
-		for i := 0; i < pubs; i++ {
-			t := randomTopic()
-			d := make([]byte, 10, 10)
-			rand.Read(d)
-			go node.Publish(t, d)
+	for i := 0; i < pubs; i++ {
 
-			// let cpu chill
-			time.Sleep(time.Duration(delay) * time.Millisecond)
-		}
+		// random topic / data
+		t := randomTopic()
+		d := make([]byte, 10, 10)
+		rand.Read(d)
+
+		// published by random node
+		node := nodes[rand.Intn(size)]
+		go node.Publish(t, d)
+
+		// let cpu chill
+		time.Sleep(time.Duration(delay) * time.Millisecond)
 	}
 
 	// stop nodes

@@ -37,7 +37,7 @@ func TestEvent(t *testing.T) {
 	e := &event{
 		topicDigest: &digest,
 		message:     []byte("bar"),
-		publishers:  []pubkey{},
+		publishers:  []*hash160digest{},
 		ttl:         42,
 	}
 	if !validEvent(e) {
@@ -53,7 +53,7 @@ func TestEvent(t *testing.T) {
 	e = &event{
 		topicDigest: &digest,
 		message:     nil,
-		publishers:  []pubkey{},
+		publishers:  []*hash160digest{},
 		ttl:         42,
 	}
 	if validEvent(e) {
@@ -75,7 +75,7 @@ func TestEvent(t *testing.T) {
 	e = &event{
 		topicDigest: nil,
 		message:     []byte("bar"),
-		publishers:  []pubkey{},
+		publishers:  []*hash160digest{},
 		ttl:         42,
 	}
 	if validEvent(e) {
