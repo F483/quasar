@@ -205,7 +205,12 @@ func collectStats(
 // Simulate network behaviour for given configuration, size,
 // events published, topics subscribed to by node.
 // Returns map with resulting statistics.
-func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
+func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]float64 {
+	if debug {
+		msg := "Simulate: size=%d, pubs=%d, subs=%d\n"
+		fmt.Printf(msg, size, pubs, subs)
+		fmt.Println("Config:", *cfg)
+	}
 
 	l := newLogger(1024)
 	nodes := newMockNetwork(l, cfg, size)
@@ -240,12 +245,15 @@ func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 
 	// wait for filters to propagate
 	delay := time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth))
-	fmt.Printf("Waiting for filter propagation: %dms\n", delay)
+	if debug {
+		fmt.Printf("Time for propagation: %ds\n", delay/1000)
+	}
 	time.Sleep(delay * time.Millisecond)
-
-	delay = time.Duration(delay / 8)
-	pn := time.Duration(pubs)
-	fmt.Printf("Publish delay: %d * %dms => %dms\n", pn, delay, pn*delay)
+	delay = time.Duration(cfg.PropagationDelay)
+	if debug {
+		total := delay * time.Duration(pubs)
+		fmt.Printf("Time for events: %ds\n", total/1000)
+	}
 
 	// create events
 	for i := 0; i < pubs; i++ {
@@ -258,10 +266,20 @@ func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 		// published by random node
 		node := nodes[rand.Intn(size)]
 		go node.Publish(t, d)
+		if debug {
+			fmt.Printf(".")
+		}
 
 		// let cpu chill
 		time.Sleep(time.Duration(delay) * time.Millisecond)
 	}
+
+	// let things settle
+	delay = time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth))
+	if debug {
+		fmt.Printf("\nTime to settle: %ds\n", delay/1000)
+	}
+	time.Sleep(delay * time.Millisecond)
 
 	// stop nodes
 	stop <- true
@@ -269,8 +287,9 @@ func Simulate(cfg *Config, size int, pubs int, subs int) map[string]float64 {
 		go node.Stop()
 	}
 
-	// let things stop
-	// time.Sleep(time.Duration(1000) * time.Millisecond)
-
-	return <-results
+	r := <-results
+	if debug {
+		fmt.Printf("Coverage: %f\n", r["coverage"])
+	}
+	return r
 }
