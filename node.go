@@ -11,8 +11,8 @@ import (
 // Node holds the quasar pubsup state
 type Node struct {
 	net               networkOverlay
+	filters           [][]byte // only to prevent malloc in sendUpdates
 	subscribers       map[hash160digest][]io.Writer
-	topics            map[hash160digest][]byte
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
 	log               *logger
@@ -33,8 +33,8 @@ func newNode(n networkOverlay, l *logger, c *Config) *Node {
 	d := dejavu.NewProbabilistic(c.HistoryLimit, c.HistoryAccuracy)
 	return &Node{
 		net:               n,
+		filters:           newFilters(c),
 		subscribers:       make(map[hash160digest][]io.Writer),
-		topics:            make(map[hash160digest][]byte),
 		mutex:             new(sync.RWMutex),
 		peers:             make(map[pubkey]*peerData),
 		log:               l,
@@ -47,9 +47,9 @@ func newNode(n networkOverlay, l *logger, c *Config) *Node {
 }
 
 func (n *Node) processUpdate(u *peerUpdate) {
-	go n.log.updateReceived(n, u)
+	n.log.updateReceived(n, u)
 	if n.net.isConnected(u.peer) == false {
-		go n.log.updateFail(n, u)
+		n.log.updateFail(n, u)
 		return // ignore to prevent memory attack
 	}
 
@@ -69,15 +69,15 @@ func (n *Node) processUpdate(u *peerUpdate) {
 	data.filters[u.index] = u.filter
 	data.timestamps[u.index] = makePeerTimestamp()
 	n.mutex.Unlock()
-	go n.log.updateSuccess(n, u)
+	n.log.updateSuccess(n, u)
 }
 
 // Publish a message on the network for given topic.
 func (n *Node) Publish(topic []byte, message []byte) {
 	// TODO validate input
 	event := newEvent(topic, message, n.cfg.DefaultEventTTL)
-	go n.log.eventPublished(n, event)
-	go n.route(event)
+	n.route(event)
+	n.log.eventPublished(n, event)
 }
 
 func (n *Node) isDuplicate(e *event) bool {
@@ -101,11 +101,11 @@ func (n *Node) subscriptions() []*hash160digest {
 // Algorithm 1 from the quasar paper.
 func (n *Node) sendUpdates() {
 	n.mutex.RLock()
-	filters := newFilters(n.cfg)
+	clearFilters(n.filters)
 	pubkey := n.net.id()
 	pubkeyDigest := hash160(pubkey[:])
 	digests := append(n.subscriptions(), &pubkeyDigest)
-	filters[0] = newFilterFromDigests(n.cfg, digests...)
+	n.filters[0] = newFilterFromDigests(n.cfg, digests...)
 	for _, data := range n.peers {
 		// XXX better if only expiredPeerGC takes care of it?
 		// if peerDataExpired(data, n.cfg) {
@@ -114,15 +114,15 @@ func (n *Node) sendUpdates() {
 		for i := 1; uint32(i) < n.cfg.FiltersDepth; i++ {
 			size := int(n.cfg.FiltersM / 8)
 			for j := 0; j < size; j++ { // inline merge for performance
-				filters[i][j] = filters[i][j] | data.filters[i-1][j]
+				n.filters[i][j] = n.filters[i][j] | data.filters[i-1][j]
 			}
 		}
 	}
 	for _, id := range n.net.connectedPeers() {
 		for i := 0; uint32(i) < (n.cfg.FiltersDepth - 1); i++ {
 			// top filter never sent as not used by peers
-			go n.net.sendUpdate(id, uint32(i), filters[i])
-			go n.log.updateSent(n, uint32(i), filters[i], id)
+			n.net.sendUpdate(id, uint32(i), n.filters[i])
+			n.log.updateSent(n, uint32(i), n.filters[i], id)
 		}
 	}
 	n.mutex.RUnlock()
@@ -133,7 +133,7 @@ func (n *Node) route(e *event) {
 	n.mutex.RLock()
 	id := n.net.id()
 	if n.isDuplicate(e) {
-		go n.log.eventDropDuplicate(n, e)
+		n.log.eventDropDuplicate(n, e)
 		n.mutex.RUnlock()
 		return
 	}
@@ -143,15 +143,15 @@ func (n *Node) route(e *event) {
 		digest := hash160(id[:])
 		e.publishers = append(e.publishers, &digest)
 		for _, peerId := range n.net.connectedPeers() {
-			go n.net.sendEvent(peerId, e)
-			go n.log.eventRouteDirect(n, e, peerId)
+			n.net.sendEvent(peerId, e)
+			n.log.eventRouteDirect(n, e, peerId)
 		}
 		n.mutex.RUnlock()
 		return
 	}
 	e.ttl -= 1
 	if e.ttl == 0 {
-		go n.log.eventDropTTL(n, e)
+		n.log.eventDropTTL(n, e)
 		n.mutex.RUnlock()
 		return
 	}
@@ -166,8 +166,8 @@ func (n *Node) route(e *event) {
 					}
 				}
 				if !negRt {
-					go n.net.sendEvent(&peerId, e)
-					go n.log.eventRouteWell(n, e, &peerId)
+					n.net.sendEvent(&peerId, e)
+					n.log.eventRouteWell(n, e, &peerId)
 					n.mutex.RUnlock()
 					return
 				}
@@ -176,8 +176,8 @@ func (n *Node) route(e *event) {
 	}
 	peerId := n.randomPeer()
 	if peerId != nil {
-		go n.net.sendEvent(peerId, e)
-		go n.log.eventRouteRandom(n, e, peerId)
+		n.net.sendEvent(peerId, e)
+		n.log.eventRouteRandom(n, e, peerId)
 	}
 	n.mutex.RUnlock()
 }
@@ -195,12 +195,12 @@ func (n *Node) dispatchInput() {
 		select {
 		case peerUpdate := <-n.net.receivedUpdateChannel():
 			if validUpdate(peerUpdate, n.cfg) {
-				go n.processUpdate(peerUpdate)
+				n.processUpdate(peerUpdate)
 			}
 		case event := <-n.net.receivedEventChannel():
 			if validEvent(event) {
-				go n.log.eventReceived(n, event)
-				go n.route(event)
+				n.log.eventReceived(n, event)
+				n.route(event)
 			}
 		case <-n.stopDispatcher:
 			return
@@ -227,7 +227,7 @@ func (n *Node) expiredPeerGC() {
 	for {
 		select {
 		case <-time.After(delay):
-			go n.removeExpiredPeers()
+			n.removeExpiredPeers()
 		case <-n.stopExpiredPeerGC:
 			return
 		}
@@ -239,7 +239,7 @@ func (n *Node) propagateFilters() {
 	for {
 		select {
 		case <-time.After(delay):
-			go n.sendUpdates()
+			n.sendUpdates()
 		case <-n.stopPropagation:
 			return
 		}
@@ -265,17 +265,22 @@ func (n *Node) Stop() {
 	n.stopExpiredPeerGC <- true
 }
 
-// Subscribe provided message receiver channel to given topic.
+// Subscribe provided message receiver to given topic.
 func (n *Node) Subscribe(topic []byte, receiver io.Writer) {
 	// TODO validate input
 	digest := hash160(topic)
+	n.SubscribeDigest(&digest, receiver)
+}
+
+// Subscribe provided message receiver to given topic digest.
+func (n *Node) SubscribeDigest(digest *hash160digest, receiver io.Writer) {
+	// TODO validate input
 	n.mutex.Lock()
-	receivers, ok := n.subscribers[digest]
+	receivers, ok := n.subscribers[*digest]
 	if ok != true { // new subscription
-		n.subscribers[digest] = []io.Writer{receiver}
-		n.topics[digest] = topic
+		n.subscribers[*digest] = []io.Writer{receiver}
 	} else { // append to existing subscribers
-		n.subscribers[digest] = append(receivers, receiver)
+		n.subscribers[*digest] = append(receivers, receiver)
 	}
 	n.mutex.Unlock()
 }
@@ -305,7 +310,6 @@ func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 	// receiver provided or no message receiver remaining
 	if ok && (receiver == nil || len(n.subscribers[digest]) == 0) {
 		delete(n.subscribers, digest)
-		delete(n.topics, digest)
 	}
 	n.mutex.Unlock()
 }
@@ -313,8 +317,13 @@ func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 // Subscribed returns true if node is subscribed to given topic.
 func (n *Node) Subscribed(topic []byte) bool {
 	digest := hash160(topic)
+	return n.SubscribedDigest(&digest)
+}
+
+// Subscribed returns true if node is subscribed to given topic digest.
+func (n *Node) SubscribedDigest(digest *hash160digest) bool {
 	n.mutex.RLock()
-	_, ok := n.subscribers[digest]
+	_, ok := n.subscribers[*digest]
 	n.mutex.RUnlock()
 	return ok
 }
@@ -330,17 +339,4 @@ func (n *Node) Subscribers(topic []byte) []io.Writer {
 	}
 	n.mutex.RUnlock()
 	return results
-}
-
-// Subscriptions retruns a slice of currently subscribed topics.
-func (n *Node) Subscriptions() [][]byte {
-	n.mutex.RLock()
-	topics := make([][]byte, len(n.topics))
-	i := 0
-	for _, topic := range n.topics {
-		topics[i] = topic
-		i++
-	}
-	n.mutex.RUnlock()
-	return topics
 }

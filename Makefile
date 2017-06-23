@@ -26,4 +26,7 @@ profile_test_single:
 	go test $(PROFILEARGS) -run $(TESTNAME)
 
 profile_results_cpu:
-	echo "top50 -cum" | go tool pprof cpu.prof
+	go tool pprof cpu.prof
+
+profile_results_mem:
+	go tool pprof http://localhost:6060/debug/pprof/heap

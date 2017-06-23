@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
+	"runtime"
 	"sync"
 	"time"
 )
@@ -66,7 +67,7 @@ func (mo *mockOverlay) stop() {
 
 }
 
-func newMockNetwork(l *logger, cfg *Config, size int) []*Node {
+func newMockNetwork(l *logger, c *Config, size int) []*Node {
 
 	// TODO add chance of dropped package to args
 
@@ -89,8 +90,8 @@ func newMockNetwork(l *logger, cfg *Config, size int) []*Node {
 		rand.Read(id[:])
 		allPeerIds[i] = &id
 		net.connections[id] = make([]*pubkey, 0)
-		net.updateChannels[id] = make(chan *peerUpdate)
-		net.eventChannels[id] = make(chan *event)
+		net.updateChannels[id] = make(chan *peerUpdate, 2048) // XXX
+		net.eventChannels[id] = make(chan *event, 2084)       // XXX
 	}
 
 	// create connections (symmetrical and unique)
@@ -119,7 +120,7 @@ func newMockNetwork(l *logger, cfg *Config, size int) []*Node {
 	nodes := make([]*Node, size, size)
 	for i, id := range allPeerIds {
 		n := mockOverlay{peer: *id, net: net}
-		nodes[i] = newNode(&n, l, cfg)
+		nodes[i] = newNode(&n, l, c)
 	}
 
 	return nodes
@@ -165,7 +166,6 @@ func calcCoverage(
 
 func collectStats(
 	l *logger,
-	topics map[hash160digest][]byte,
 	subcnt map[hash160digest]int,
 	stop chan bool, // signal stop collection and compile results
 	rc chan map[string]float64, // results channel
@@ -202,96 +202,106 @@ func collectStats(
 	rc <- r
 }
 
+func addSubscriptions(nodes []*Node, subs int) map[hash160digest]int {
+	subcnt := make(map[hash160digest]int) // digest -> sub count
+	for _, node := range nodes {
+		for i := 0; i < subs; i++ {
+			for {
+				topicDigest := hash160(randomTopic())
+				if node.SubscribedDigest(&topicDigest) {
+					continue // avoid duplicate subscriptions
+				}
+				if cnt, ok := subcnt[topicDigest]; ok {
+					subcnt[topicDigest] = cnt + 1
+				} else {
+					subcnt[topicDigest] = 1
+				}
+				node.SubscribeDigest(&topicDigest, ioutil.Discard)
+				break
+			}
+		}
+	}
+	return subcnt
+}
+
+func createEvent(nodes []*Node, logStdOut bool) {
+
+	// random topic / data
+	t := randomTopic()
+	d := make([]byte, 10, 10)
+	rand.Read(d)
+
+	// published by random node
+	node := nodes[rand.Intn(len(nodes))]
+	node.Publish(t, d)
+	if logStdOut {
+		fmt.Printf(".")
+	}
+}
+
+func createEvents(nodes []*Node, pubs int, c *Config, logStdOut bool) {
+	delay := c.PropagationDelay
+	if logStdOut {
+		total := delay * uint64(pubs) * 2
+		fmt.Printf("Time for events: %ds\n", total/1000)
+	}
+
+	for i := 0; i < pubs; i++ {
+		createEvent(nodes, logStdOut)
+
+		// let cpu chill and collect garbage
+		time.Sleep(time.Duration(delay) * time.Millisecond)
+		runtime.GC()
+	}
+}
+
 // Simulate network behaviour for given configuration, size,
 // events published, topics subscribed to by node.
 // Returns map with resulting statistics.
-func Simulate(cfg *Config, size int, pubs int, subs int, logStdOut bool) map[string]float64 {
+func Simulate(c *Config, size int, pubs int, subs int, logStdOut bool) map[string]float64 {
 
 	// TODO use io.Writer or logger instead of logStdOut var
 	if logStdOut {
 		msg := "Simulate: size=%d, pubs=%d, subs=%d\n"
 		fmt.Printf(msg, size, pubs, subs)
-		fmt.Println("Config:", *cfg)
+		fmt.Println("Config:", *c)
 	}
 
 	l := newLogger(1024)
-	nodes := newMockNetwork(l, cfg, size)
-	topics := make(map[hash160digest][]byte) // digest -> topic
-	subcnt := make(map[hash160digest]int)    // digest -> sub count
+	nodes := newMockNetwork(l, c, size)
 
-	// add subscriptions
-	for _, node := range nodes {
-		for i := 0; i < subs; i++ {
-			for {
-				topic := randomTopic()
-				if node.Subscribed(topic) {
-					continue // avoid duplicate subscriptions
-				}
-				topicDigest := hash160(topic)
-				if cnt, ok := subcnt[topicDigest]; ok {
-					subcnt[topicDigest] = cnt + 1
-				} else {
-					topics[topicDigest] = topic
-					subcnt[topicDigest] = 1
-				}
-				node.Subscribe(topic, ioutil.Discard)
-				break
-			}
-		}
-	}
+	subcnt := addSubscriptions(nodes, subs)
+	runtime.GC()
 
 	// start nodes
 	for _, node := range nodes {
-		go node.Start()
+		node.Start()
 	}
 
 	// start stats collector
 	stop := make(chan bool)
 	results := make(chan map[string]float64)
-	go collectStats(l, topics, subcnt, stop, results)
+	go collectStats(l, subcnt, stop, results)
 
 	// wait for filters to propagate
-	delay := time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth) * 2)
+	delay := c.PropagationDelay * uint64(c.FiltersDepth) * 1
 	if logStdOut {
 		fmt.Printf("Time for propagation: %ds\n", delay/1000)
 	}
-	time.Sleep(delay * time.Millisecond)
-	delay = time.Duration(cfg.PropagationDelay)
-	if logStdOut {
-		total := delay * time.Duration(pubs)
-		fmt.Printf("Time for events: %ds\n", total/1000)
-	}
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 
-	// create events
-	for i := 0; i < pubs; i++ {
-
-		// random topic / data
-		t := randomTopic()
-		d := make([]byte, 10, 10)
-		rand.Read(d)
-
-		// published by random node
-		node := nodes[rand.Intn(size)]
-		go node.Publish(t, d)
-		if logStdOut {
-			fmt.Printf(".")
-		}
-
-		// let cpu chill
-		time.Sleep(time.Duration(delay) * time.Millisecond)
-	}
+	createEvents(nodes, pubs, c, logStdOut)
 
 	// let things settle
-	delay = time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth) * 2)
 	if logStdOut {
 		fmt.Printf("\nTime to settle: %ds\n", delay/1000)
 	}
-	time.Sleep(delay * time.Millisecond)
+	time.Sleep(time.Duration(delay) * time.Millisecond)
 
 	// stop nodes
 	stop <- true
 	for _, node := range nodes {
-		go node.Stop()
+		node.Stop()
 	}
 
 	r := <-results

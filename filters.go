@@ -33,6 +33,16 @@ func deserializeFilter(d []byte, c *Config) *bloom.BloomFilter {
 	return f
 }
 
+func clearFilters(filters [][]byte) {
+	d := len(filters) // depth
+	for i := 0; i < d; i++ {
+		w := len(filters[i]) // width
+		for j := 0; j < w; j++ {
+			filters[i][j] = 0
+		}
+	}
+}
+
 func newFilters(c *Config) [][]byte {
 	m := c.FiltersM
 	filters := make([][]byte, c.FiltersDepth, c.FiltersDepth)
