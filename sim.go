@@ -205,8 +205,10 @@ func collectStats(
 // Simulate network behaviour for given configuration, size,
 // events published, topics subscribed to by node.
 // Returns map with resulting statistics.
-func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]float64 {
-	if debug {
+func Simulate(cfg *Config, size int, pubs int, subs int, logStdOut bool) map[string]float64 {
+
+	// TODO use io.Writer or logger instead of logStdOut var
+	if logStdOut {
 		msg := "Simulate: size=%d, pubs=%d, subs=%d\n"
 		fmt.Printf(msg, size, pubs, subs)
 		fmt.Println("Config:", *cfg)
@@ -220,16 +222,21 @@ func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]
 	// add subscriptions
 	for _, node := range nodes {
 		for i := 0; i < subs; i++ {
-			t := randomTopic()
-			d := hash160(t)
-			// FIXME what about duplicate subs per node?
-			if cnt, ok := subcnt[d]; ok {
-				subcnt[d] = cnt + 1
-			} else {
-				topics[d] = t
-				subcnt[d] = 1
+			for {
+				topic := randomTopic()
+				if node.Subscribed(topic) {
+					continue // avoid duplicate subscriptions
+				}
+				topicDigest := hash160(topic)
+				if cnt, ok := subcnt[topicDigest]; ok {
+					subcnt[topicDigest] = cnt + 1
+				} else {
+					topics[topicDigest] = topic
+					subcnt[topicDigest] = 1
+				}
+				node.Subscribe(topic, ioutil.Discard)
+				break
 			}
-			go node.Subscribe(t, ioutil.Discard)
 		}
 	}
 
@@ -244,13 +251,13 @@ func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]
 	go collectStats(l, topics, subcnt, stop, results)
 
 	// wait for filters to propagate
-	delay := time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth))
-	if debug {
+	delay := time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth) * 2)
+	if logStdOut {
 		fmt.Printf("Time for propagation: %ds\n", delay/1000)
 	}
 	time.Sleep(delay * time.Millisecond)
 	delay = time.Duration(cfg.PropagationDelay)
-	if debug {
+	if logStdOut {
 		total := delay * time.Duration(pubs)
 		fmt.Printf("Time for events: %ds\n", total/1000)
 	}
@@ -266,7 +273,7 @@ func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]
 		// published by random node
 		node := nodes[rand.Intn(size)]
 		go node.Publish(t, d)
-		if debug {
+		if logStdOut {
 			fmt.Printf(".")
 		}
 
@@ -275,8 +282,8 @@ func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]
 	}
 
 	// let things settle
-	delay = time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth))
-	if debug {
+	delay = time.Duration(cfg.PropagationDelay * uint64(cfg.FiltersDepth) * 2)
+	if logStdOut {
 		fmt.Printf("\nTime to settle: %ds\n", delay/1000)
 	}
 	time.Sleep(delay * time.Millisecond)
@@ -288,7 +295,7 @@ func Simulate(cfg *Config, size int, pubs int, subs int, debug bool) map[string]
 	}
 
 	r := <-results
-	if debug {
+	if logStdOut {
 		fmt.Printf("Coverage: %f\n", r["coverage"])
 	}
 	return r

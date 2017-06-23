@@ -310,6 +310,15 @@ func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 	n.mutex.Unlock()
 }
 
+// Subscribed returns true if node is subscribed to given topic.
+func (n *Node) Subscribed(topic []byte) bool {
+	digest := hash160(topic)
+	n.mutex.RLock()
+	_, ok := n.subscribers[digest]
+	n.mutex.RUnlock()
+	return ok
+}
+
 // Subscribers retruns message receivers for given topic.
 func (n *Node) Subscribers(topic []byte) []io.Writer {
 	// TODO validate input
