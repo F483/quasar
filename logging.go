@@ -50,14 +50,14 @@ func newLogger(bufsize int) *logger {
 	}
 }
 
-func (l *logger) updateSent(n *Node, i uint32, f []byte, t *pubkey) {
+func (l *logger) updateSent(n *Node, f [][]byte, t *pubkey) {
 	if l != nil {
 		var id *pubkey
 		if n != nil {
 			idv := n.net.id()
 			id = &idv
 		}
-		u := &peerUpdate{peer: id, index: i, filter: f}
+		u := &peerUpdate{peer: id, filters: f}
 		l.updatesSent <- &logUpdate{
 			node: n, entry: u, target: t,
 		}

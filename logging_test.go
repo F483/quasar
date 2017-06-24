@@ -9,7 +9,7 @@ import (
 
 func sendUpdateLogEntries(l *logger, allSent chan bool) {
 	time.Sleep(time.Millisecond * time.Duration(100))
-	l.updateSent(nil, 0, nil, nil)
+	l.updateSent(nil, nil, nil)
 	l.updateReceived(nil, nil)
 	l.updateSuccess(nil, nil)
 	l.updateFail(nil, nil)

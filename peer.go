@@ -3,8 +3,8 @@ package quasar
 import "time"
 
 type peerData struct {
-	filters    [][]byte
-	timestamps []uint64 // unixtime
+	filters   [][]byte
+	timestamp uint64 // unixtime
 }
 
 func makePeerTimestamp() uint64 {
@@ -12,27 +12,27 @@ func makePeerTimestamp() uint64 {
 }
 
 func peerDataExpired(p *peerData, c *Config) bool {
-	now := makePeerTimestamp()
-	size := len(p.timestamps)
-	oldest := now - c.FilterFreshness
-	for i := 0; i < size; i++ {
-		if p.timestamps[i] >= oldest {
+	return (makePeerTimestamp() - c.FilterFreshness) > p.timestamp
+}
+
+type peerUpdate struct {
+	peer    *pubkey
+	filters [][]byte
+}
+
+func validUpdate(u *peerUpdate, c *Config) bool {
+	if u == nil || c == nil || u.peer == nil {
+		return false
+	}
+	if uint32(len(u.filters)) != c.FiltersDepth {
+		return false
+	}
+	for _, f := range u.filters {
+		if uint64(len(f)) != (c.FiltersM / 8) {
 			return false
 		}
 	}
 	return true
-}
-
-type peerUpdate struct {
-	peer   *pubkey
-	index  uint32
-	filter []byte
-}
-
-func validUpdate(u *peerUpdate, c *Config) bool {
-	return u != nil && c != nil && u.peer != nil &&
-		u.index < (c.FiltersDepth-1) && // top filter never propagated
-		uint64(len(u.filter)) == (c.FiltersM/8)
 }
 
 // func serializePeerUpdate(u *peerUpdate) []byte {

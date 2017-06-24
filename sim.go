@@ -54,8 +54,8 @@ func (mo *mockOverlay) sendEvent(id *pubkey, e *event) {
 	mo.net.eventChannels[*id] <- e
 }
 
-func (mo *mockOverlay) sendUpdate(id *pubkey, i uint32, filter []byte) {
-	u := &peerUpdate{peer: &mo.peer, index: i, filter: filter}
+func (mo *mockOverlay) sendUpdate(id *pubkey, filters [][]byte) {
+	u := &peerUpdate{peer: &mo.peer, filters: filters}
 	mo.net.updateChannels[*id] <- u
 }
 

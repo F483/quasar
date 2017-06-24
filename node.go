@@ -57,17 +57,16 @@ func (n *Node) processUpdate(u *peerUpdate) {
 	data, ok := n.peers[*u.peer]
 
 	if !ok { // init if doesnt exist
-		depth := n.cfg.FiltersDepth
 		data = &peerData{
-			filters:    newFilters(n.cfg),
-			timestamps: make([]uint64, depth, depth),
+			filters:   newFilters(n.cfg),
+			timestamp: 0,
 		}
 		n.peers[*u.peer] = data
 	}
 
 	// update peer data
-	data.filters[u.index] = u.filter
-	data.timestamps[u.index] = makePeerTimestamp()
+	data.filters = u.filters
+	data.timestamp = makePeerTimestamp()
 	n.mutex.Unlock()
 	n.log.updateSuccess(n, u)
 }
@@ -119,11 +118,9 @@ func (n *Node) sendUpdates() {
 		}
 	}
 	for _, id := range n.net.connectedPeers() {
-		for i := 0; uint32(i) < (n.cfg.FiltersDepth - 1); i++ {
-			// top filter never sent as not used by peers
-			n.net.sendUpdate(id, uint32(i), n.filters[i])
-			n.log.updateSent(n, uint32(i), n.filters[i], id)
-		}
+		// top filter never sent as not used by peers
+		n.net.sendUpdate(id, n.filters)
+		n.log.updateSent(n, n.filters, id)
 	}
 	n.mutex.RUnlock()
 }

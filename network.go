@@ -16,7 +16,7 @@ type networkOverlay interface {
 	receivedEventChannel() chan *event
 	receivedUpdateChannel() chan *peerUpdate
 	sendEvent(peerId *pubkey, e *event)
-	sendUpdate(peerId *pubkey, index uint32, filter []byte)
+	sendUpdate(peerId *pubkey, filters [][]byte)
 	start()
 	stop()
 }
