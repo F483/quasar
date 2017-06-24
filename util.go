@@ -2,7 +2,6 @@ package quasar
 
 import (
 	"fmt"
-	"math/rand"
 	"reflect"
 )
 
@@ -26,15 +25,5 @@ func isNil(a interface{}) bool {
 func mustNotBeNil(a interface{}) {
 	if isNil(a) {
 		panic("Expected non nil value!")
-	}
-}
-
-func randIntnExcluding(limit int, exclude int) int {
-	// TODO validate input is sane
-	for {
-		n := rand.Intn(limit)
-		if n != exclude {
-			return n
-		}
 	}
 }

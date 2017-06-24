@@ -95,16 +95,20 @@ func newMockNetwork(l *logger, c *Config, size int) []*Node {
 	}
 
 	// create connections (symmetrical and unique)
-	for _, id := range allPeerIds {
+	for i, id := range allPeerIds {
 		exausted := false
 		for len(net.connections[*id]) < peerCnt && !exausted {
-			start := rand.Intn(size)    // random starting point
-			for i := 0; i < size; i++ { // try peers once then give up
-				oid := allPeerIds[(start+i)%size]
+
+			// shitty chord sim
+			exp := float64(len(net.connections[*id]))
+			start := (i + int(math.Pow(2, exp))) % size
+
+			for j := 0; j < size; j++ { // try peers once then give up
+				oid := allPeerIds[(start+j)%size]
 				self := *oid == *id // dont link to self
 				full := len(net.connections[*oid]) == peerCnt
 				if self || full || net.connected(id, oid) {
-					if i == size-1 {
+					if j == size-1 {
 						exausted = true // no more connections possible
 					}
 					continue // go to next candidate
@@ -169,6 +173,7 @@ func collectStats(
 	subcnt map[hash160digest]int,
 	stop chan bool, // signal stop collection and compile results
 	rc chan map[string]float64, // results channel
+	logStdOut bool,
 ) {
 
 	publishmutex := new(sync.Mutex)
@@ -199,6 +204,9 @@ func collectStats(
 	}
 	r := make(map[string]float64)
 	r["coverage"] = calcCoverage(subcnt, publishcnt, delivercnt)
+	if logStdOut {
+		fmt.Printf("Coverage: %f\n", r["coverage"])
+	}
 	rc <- r
 }
 
@@ -279,9 +287,9 @@ func Simulate(c *Config, size int, pubs int, subs int, logStdOut bool) map[strin
 	}
 
 	// start stats collector
-	stop := make(chan bool)
+	stop := make(chan bool, 8) // XXX
 	results := make(chan map[string]float64)
-	go collectStats(l, subcnt, stop, results)
+	go collectStats(l, subcnt, stop, results, logStdOut)
 
 	// wait for filters to propagate
 	delay := c.PropagationDelay * uint64(c.FiltersDepth) * 1
@@ -305,8 +313,5 @@ func Simulate(c *Config, size int, pubs int, subs int, logStdOut bool) map[strin
 	}
 
 	r := <-results
-	if logStdOut {
-		fmt.Printf("Coverage: %f\n", r["coverage"])
-	}
 	return r
 }
