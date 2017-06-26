@@ -15,12 +15,14 @@ Go implementation of the [quasar protocol](https://www.microsoft.com/en-us/resea
 
 # Simulation Statistics
 
+
 ## Subscription false positive rate.
 
 The more saturated the root subscription bloom filter becomes, the more
 false positives.
 
 ![Subscription False Positive rate](https://github.com/f483/quasar/raw/master/_simulation/subfprate.png)
+
 
 ## Topic subscription distribution.
 
@@ -32,8 +34,19 @@ subscriptions, loosly based on twitter data.
 
 ## Testing Setup
 
-The simulation uses a mock overlay network. Peers connected randomly to
-one another. This allows quick isolated testing of the quasar protocol.
+The simulation uses a mock overlay network. This allows quick isolated
+testing of the quasar protocol.
 
-It does not allow testing of: Peer discovery, churn behaviour, NAT traversal or behaviour of different overlay networks.
+It does not allow testing of: Peer discovery, churn behaviour, NAT
+traversal or behaviour of different overlay networks.
 
+Default configuration:
+ 
+ * Network size: 2048 Nodes
+ * Subscriptions per node: 1024
+ * Default event ttl: 64 hops
+ * Filter freshness: 50000
+ * Filter propagation delay: 20000
+ * Filters depth: 3
+ * Filters m: 4096
+ * Filters k: 3
