@@ -14,7 +14,7 @@ type networkOverlay interface {
 	connectedPeers() []*pubkey
 	isConnected(peerId *pubkey) bool
 	receivedEventChannel() chan *event
-	receivedUpdateChannel() chan *peerUpdate
+	receivedUpdateChannel() chan *update
 	sendEvent(peerId *pubkey, e *event)
 	sendUpdate(peerId *pubkey, filters [][]byte)
 	start()

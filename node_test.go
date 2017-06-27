@@ -52,8 +52,9 @@ func TestEventDelivery(t *testing.T) {
 	nodes[1].Publish([]byte("foo"), []byte("foodata"))
 	time.Sleep(time.Millisecond * time.Duration(cfg.PropagationDelay*2))
 
-	if !reflect.DeepEqual(fooReceiver.Bytes(), []byte("foodata")) {
-		t.Errorf("Incorrect event data!")
+	received := fooReceiver.Bytes()
+	if !reflect.DeepEqual(received, []byte("foodata")) {
+		t.Errorf("Incorrect event data: %#X", received)
 	}
 
 	// stop nodes and logger

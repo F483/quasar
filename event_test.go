@@ -8,16 +8,16 @@ func TestNewEvent(t *testing.T) {
 	if event == nil {
 		t.Errorf("Expected event!")
 	}
-	if string(event.message) != "test message" {
+	if string(event.Message) != "test message" {
 		t.Errorf("event message not set!")
 	}
-	if event.ttl != ttl {
+	if event.Ttl != ttl {
 		t.Errorf("event ttl not set!")
 	}
-	if event.publishers == nil && len(event.publishers) != 0 {
+	if event.Publishers == nil && len(event.Publishers) != 0 {
 		t.Errorf("event publishers not set!")
 	}
-	if event.topicDigest == nil {
+	if event.TopicDigest == nil {
 		t.Errorf("event digest not set!")
 	}
 }
@@ -25,60 +25,63 @@ func TestNewEvent(t *testing.T) {
 func TestEvent(t *testing.T) {
 
 	// new always creates valid event
-	if !validEvent(newEvent([]byte("foo"), []byte("bar"), 1)) {
+	e := newEvent([]byte("foo"), []byte("bar"), 1)
+	if !e.valid() {
 		t.Errorf("Expected valid event!")
 	}
-	if !validEvent(newEvent(nil, nil, 0)) {
+	e = newEvent(nil, nil, 0)
+	if !e.valid() {
 		t.Errorf("Expected valid event!")
 	}
 
 	// valid event
-	digest := hash160([]byte("foo"))
-	e := &event{
-		topicDigest: &digest,
-		message:     []byte("bar"),
-		publishers:  []*hash160digest{},
-		ttl:         42,
+	digest := sha256sum([]byte("foo"))
+	e = &event{
+		TopicDigest: &digest,
+		Message:     []byte("bar"),
+		Publishers:  []*sha256digest{},
+		Ttl:         42,
 	}
-	if !validEvent(e) {
+	if !e.valid() {
 		t.Errorf("Expected invalid event!")
 	}
 
 	// nil event
-	if validEvent(nil) {
+	e = nil
+	if e.valid() {
 		t.Errorf("Expected invalid event!")
 	}
 
 	// message nil
 	e = &event{
-		topicDigest: &digest,
-		message:     nil,
-		publishers:  []*hash160digest{},
-		ttl:         42,
+		TopicDigest: &digest,
+		Message:     nil,
+		Publishers:  []*sha256digest{},
+		Ttl:         42,
 	}
-	if validEvent(e) {
+	if e.valid() {
 		t.Errorf("Expected invalid event!")
 	}
 
 	// publishers nil
 	e = &event{
-		topicDigest: &digest,
-		message:     []byte("bar"),
-		publishers:  nil,
-		ttl:         42,
+		TopicDigest: &digest,
+		Message:     []byte("bar"),
+		Publishers:  nil,
+		Ttl:         42,
 	}
-	if validEvent(e) {
+	if e.valid() {
 		t.Errorf("Expected invalid event!")
 	}
 
 	// topic digest nil
 	e = &event{
-		topicDigest: nil,
-		message:     []byte("bar"),
-		publishers:  []*hash160digest{},
-		ttl:         42,
+		TopicDigest: nil,
+		Message:     []byte("bar"),
+		Publishers:  []*sha256digest{},
+		Ttl:         42,
 	}
-	if validEvent(e) {
+	if e.valid() {
 		t.Errorf("Expected invalid event!")
 	}
 }

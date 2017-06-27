@@ -14,8 +14,8 @@ type Config struct {
 
 // StandardConfig uses well agreed upon values, only deviate for testing.
 var StandardConfig = Config{
-	DefaultEventTTL:  32,              // 4 missed wells
-	FilterFreshness:  50000,           // 50sec (>2.5 propagation)
+	DefaultEventTTL:  64,              // ~8 missed wells
+	FilterFreshness:  50000,           // 50sec (>2.5 propagations)
 	PropagationDelay: 20000,           // 20sec (~0.5M/min const traffic)
 	HistoryLimit:     1048576,         // remember last 1G events
 	HistoryAccuracy:  1.0 / 1048576.0, // avg 1 false positive per 1G

@@ -29,7 +29,7 @@ func TestHash160(t *testing.T) {
 		t.Errorf("Incorrect digest size! %d", expectedBytesLen)
 	}
 
-	digest := hash160(topic)
+	digest := hash160sum(topic)
 	if digest != expected {
 		t.Errorf("Hash160 failed!")
 	}

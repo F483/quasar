@@ -6,8 +6,11 @@ import (
 	"github.com/willf/bloom"
 )
 
-// FIXME just using sha256 for digest faster?
 // FIXME always binary.BigEndian?
+
+// TODO define types and use methods for better namespacing
+// type filters [][]byte
+// type filter []byte
 
 func serializeFilter(f *bloom.BloomFilter) []byte {
 	data, err := f.GobEncode()
@@ -52,7 +55,7 @@ func newFilters(c *Config) [][]byte {
 	return filters
 }
 
-func newFilterFromDigests(c *Config, digests ...*hash160digest) []byte {
+func newFilterFromDigests(c *Config, digests ...*sha256digest) []byte {
 	m := c.FiltersM
 	k := c.FiltersK
 	bf := bloom.New(uint(m), uint(k))
@@ -63,15 +66,15 @@ func newFilterFromDigests(c *Config, digests ...*hash160digest) []byte {
 }
 
 func filterInsert(f []byte, c *Config, datas ...[]byte) []byte {
-	ds := make([]*hash160digest, len(datas), len(datas))
+	ds := make([]*sha256digest, len(datas), len(datas))
 	for i, data := range datas {
-		digest := hash160(data)
+		digest := sha256sum(data)
 		ds[i] = &digest
 	}
 	return filterInsertDigest(f, c, ds...)
 }
 
-func filterInsertDigest(f []byte, c *Config, ds ...*hash160digest) []byte {
+func filterInsertDigest(f []byte, c *Config, ds ...*sha256digest) []byte {
 	bf := deserializeFilter(f, c)
 	for _, d := range ds {
 		bf.Add(d[:])
@@ -94,11 +97,11 @@ func mergeFilters(fs ...[]byte) []byte {
 }
 
 func filterContains(f []byte, c *Config, data []byte) bool {
-	digest := hash160(data)
+	digest := sha256sum(data)
 	return filterContainsDigest(f, c, &digest)
 }
 
-func filterContainsDigest(f []byte, c *Config, d *hash160digest) bool {
+func filterContainsDigest(f []byte, c *Config, d *sha256digest) bool {
 	bf := deserializeFilter(f, c)
 	return bf.Test(d[:])
 }

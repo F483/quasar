@@ -19,34 +19,35 @@ func TestUpdate(t *testing.T) {
 
 	// valid update
 	filters := newFilters(cfg)
-	u := &peerUpdate{
-		peer:    &pk,
-		filters: filters,
+	u := &update{
+		NodeId:  &pk,
+		Filters: filters,
 	}
-	if !validUpdate(u, cfg) {
+	if !u.valid(cfg) {
 		t.Errorf("Expected valid update!")
 	}
 
 	// nil update
-	if validUpdate(nil, cfg) {
+	u = nil
+	if u.valid(cfg) {
 		t.Errorf("Expected valid update!")
 	}
 
 	// nil peer
-	u = &peerUpdate{
-		peer:    nil,
-		filters: filters,
+	u = &update{
+		NodeId:  nil,
+		Filters: filters,
 	}
-	if validUpdate(u, cfg) {
+	if u.valid(cfg) {
 		t.Errorf("Expected valid update!")
 	}
 
 	// incorrect filter len
-	u = &peerUpdate{
-		peer:    &pk,
-		filters: filters[:depth-1],
+	u = &update{
+		NodeId:  &pk,
+		Filters: filters[:depth-1],
 	}
-	if validUpdate(u, cfg) {
+	if u.valid(cfg) {
 		t.Errorf("Expected valid update!")
 	}
 }

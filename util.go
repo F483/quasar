@@ -3,7 +3,13 @@ package quasar
 import (
 	"fmt"
 	"reflect"
+	"time"
 )
+
+// time since unix epoch in ms
+func newTimestampMS() uint64 {
+	return uint64(time.Now().UnixNano()) / uint64(time.Millisecond)
+}
 
 func mustBeTrue(value bool, format string, a ...interface{}) {
 	if value != true {

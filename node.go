@@ -12,7 +12,7 @@ import (
 type Node struct {
 	net               networkOverlay
 	filters           [][]byte // only to prevent malloc in sendUpdates
-	subscribers       map[hash160digest][]io.Writer
+	subscribers       map[sha256digest][]io.Writer
 	mutex             *sync.RWMutex
 	peers             map[pubkey]*peerData
 	log               *logger
@@ -21,6 +21,15 @@ type Node struct {
 	stopDispatcher    chan bool
 	stopPropagation   chan bool
 	stopExpiredPeerGC chan bool
+}
+
+type peerData struct {
+	filters   [][]byte
+	timestamp uint64 // unixtime
+}
+
+func (p *peerData) isExpired(c *Config) bool {
+	return (newTimestampMS() - c.FilterFreshness) > p.timestamp
 }
 
 // New create instance with the sane defaults.
@@ -34,7 +43,7 @@ func newNode(n networkOverlay, l *logger, c *Config) *Node {
 	return &Node{
 		net:               n,
 		filters:           newFilters(c),
-		subscribers:       make(map[hash160digest][]io.Writer),
+		subscribers:       make(map[sha256digest][]io.Writer),
 		mutex:             new(sync.RWMutex),
 		peers:             make(map[pubkey]*peerData),
 		log:               l,
@@ -46,27 +55,27 @@ func newNode(n networkOverlay, l *logger, c *Config) *Node {
 	}
 }
 
-func (n *Node) processUpdate(u *peerUpdate) {
+func (n *Node) processUpdate(u *update) {
 	n.log.updateReceived(n, u)
-	if n.net.isConnected(u.peer) == false {
+	if n.net.isConnected(u.NodeId) == false {
 		n.log.updateFail(n, u)
 		return // ignore to prevent memory attack
 	}
 
 	n.mutex.Lock()
-	data, ok := n.peers[*u.peer]
+	data, ok := n.peers[*u.NodeId]
 
 	if !ok { // init if doesnt exist
 		data = &peerData{
 			filters:   newFilters(n.cfg),
 			timestamp: 0,
 		}
-		n.peers[*u.peer] = data
+		n.peers[*u.NodeId] = data
 	}
 
 	// update peer data
-	data.filters = u.filters
-	data.timestamp = makePeerTimestamp()
+	data.filters = u.Filters
+	data.timestamp = newTimestampMS()
 	n.mutex.Unlock()
 	n.log.updateSuccess(n, u)
 }
@@ -80,17 +89,17 @@ func (n *Node) Publish(topic []byte, message []byte) {
 }
 
 func (n *Node) isDuplicate(e *event) bool {
-	return n.history.Witness(append(e.topicDigest[:20], e.message...))
+	return n.history.Witness(append(e.TopicDigest[:], e.Message...))
 }
 
 func (n *Node) deliver(receivers []io.Writer, e *event) {
 	for _, receiver := range receivers {
-		receiver.Write(e.message)
+		receiver.Write(e.Message)
 	}
 }
 
-func (n *Node) subscriptions() []*hash160digest {
-	digests := make([]*hash160digest, 0)
+func (n *Node) subscriptions() []*sha256digest {
+	digests := make([]*sha256digest, 0)
 	for digest := range n.subscribers {
 		digests = append(digests, &digest)
 	}
@@ -102,12 +111,12 @@ func (n *Node) sendUpdates() {
 	n.mutex.RLock()
 	clearFilters(n.filters)
 	pubkey := n.net.id()
-	pubkeyDigest := hash160(pubkey[:])
+	pubkeyDigest := sha256sum(pubkey[:])
 	digests := append(n.subscriptions(), &pubkeyDigest)
 	n.filters[0] = newFilterFromDigests(n.cfg, digests...)
 	for _, data := range n.peers {
 		// XXX better if only expiredPeerGC takes care of it?
-		// if peerDataExpired(data, n.cfg) {
+		// if data.isExpired(n.cfg) {
 		// 		continue
 		// 	}
 		for i := 1; uint32(i) < n.cfg.FiltersDepth; i++ {
@@ -128,76 +137,75 @@ func (n *Node) sendUpdates() {
 // Algorithm 2 from the quasar paper.
 func (n *Node) route(e *event) {
 	n.mutex.RLock()
-	id := n.net.id()
+	defer n.mutex.RUnlock()
+	nodeId := n.net.id()
 	if n.isDuplicate(e) {
 		n.log.eventDropDuplicate(n, e)
-		n.mutex.RUnlock()
 		return
 	}
-	if receivers, ok := n.subscribers[*e.topicDigest]; ok {
-		n.log.eventDeliver(n, e)
+	if receivers, ok := n.subscribers[*e.TopicDigest]; ok {
 		n.deliver(receivers, e)
-		digest := hash160(id[:])
-		e.publishers = append(e.publishers, &digest)
+		n.log.eventDeliver(n, e)
+		e.addPublisher(&nodeId)
 		for _, peerId := range n.net.connectedPeers() {
-			n.net.sendEvent(peerId, e)
-			n.log.eventRouteDirect(n, e, peerId)
+			if !e.inPublishers(peerId) {
+				n.net.sendEvent(peerId, e)
+				n.log.eventRouteDirect(n, e, peerId)
+			}
 		}
-		n.mutex.RUnlock()
 		return
 	}
-	e.ttl -= 1
-	if e.ttl == 0 {
+	e.Ttl -= 1
+	if e.Ttl == 0 {
 		n.log.eventDropTTL(n, e)
-		n.mutex.RUnlock()
 		return
 	}
 	for i := 0; uint32(i) < n.cfg.FiltersDepth; i++ {
 		for peerId, data := range n.peers {
 			f := data.filters[i]
-			if filterContainsDigest(f, n.cfg, e.topicDigest) {
+			if filterContainsDigest(f, n.cfg, e.TopicDigest) {
 				negRt := false
-				for _, publisher := range e.publishers {
+				for _, publisher := range e.Publishers {
 					if filterContainsDigest(f, n.cfg, publisher) {
 						negRt = true
 					}
 				}
-				if !negRt {
+				if !negRt && !e.inPublishers(&peerId) {
 					n.net.sendEvent(&peerId, e)
 					n.log.eventRouteWell(n, e, &peerId)
-					n.mutex.RUnlock()
 					return
 				}
 			}
 		}
 	}
-	peerId := n.randomPeer()
-	if peerId != nil {
+	n.sendToRandomPeer(e)
+}
+
+func (n *Node) sendToRandomPeer(e *event) {
+	peers := make([]*pubkey, 0)
+	for _, peerId := range n.net.connectedPeers() {
+		if !e.inPublishers(peerId) {
+			peers = append(peers, peerId)
+		}
+	}
+	if len(peers) > 0 {
+		peerId := peers[rand.Intn(len(peers))]
 		n.net.sendEvent(peerId, e)
 		n.log.eventRouteRandom(n, e, peerId)
 	}
-	n.mutex.RUnlock()
-}
-
-func (n *Node) randomPeer() *pubkey {
-	peers := n.net.connectedPeers()
-	if len(peers) == 0 {
-		return nil
-	}
-	return peers[rand.Intn(len(peers))]
 }
 
 func (n *Node) dispatchInput() {
 	for {
 		select {
-		case peerUpdate := <-n.net.receivedUpdateChannel():
-			if validUpdate(peerUpdate, n.cfg) {
-				n.processUpdate(peerUpdate)
+		case u := <-n.net.receivedUpdateChannel():
+			if u.valid(n.cfg) {
+				n.processUpdate(u)
 			}
-		case event := <-n.net.receivedEventChannel():
-			if validEvent(event) {
-				n.log.eventReceived(n, event)
-				n.route(event)
+		case e := <-n.net.receivedEventChannel():
+			if e.valid() {
+				n.log.eventReceived(n, e)
+				n.route(e)
 			}
 		case <-n.stopDispatcher:
 			return
@@ -209,7 +217,7 @@ func (n *Node) removeExpiredPeers() {
 	n.mutex.Lock()
 	toRemove := []*pubkey{}
 	for peerId, data := range n.peers {
-		if peerDataExpired(data, n.cfg) {
+		if data.isExpired(n.cfg) {
 			toRemove = append(toRemove, &peerId)
 		}
 	}
@@ -265,12 +273,12 @@ func (n *Node) Stop() {
 // Subscribe provided message receiver to given topic.
 func (n *Node) Subscribe(topic []byte, receiver io.Writer) {
 	// TODO validate input
-	digest := hash160(topic)
+	digest := sha256sum(topic)
 	n.SubscribeDigest(&digest, receiver)
 }
 
 // Subscribe provided message receiver to given topic digest.
-func (n *Node) SubscribeDigest(digest *hash160digest, receiver io.Writer) {
+func (n *Node) SubscribeDigest(digest *sha256digest, receiver io.Writer) {
 	// TODO validate input
 	n.mutex.Lock()
 	receivers, ok := n.subscribers[*digest]
@@ -288,7 +296,7 @@ func (n *Node) SubscribeDigest(digest *hash160digest, receiver io.Writer) {
 func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 	// TODO validate input
 
-	digest := hash160(topic)
+	digest := sha256sum(topic)
 	n.mutex.Lock()
 	receivers, ok := n.subscribers[digest]
 
@@ -313,12 +321,12 @@ func (n *Node) Unsubscribe(topic []byte, receiver io.Writer) {
 
 // Subscribed returns true if node is subscribed to given topic.
 func (n *Node) Subscribed(topic []byte) bool {
-	digest := hash160(topic)
+	digest := sha256sum(topic)
 	return n.SubscribedDigest(&digest)
 }
 
 // Subscribed returns true if node is subscribed to given topic digest.
-func (n *Node) SubscribedDigest(digest *hash160digest) bool {
+func (n *Node) SubscribedDigest(digest *sha256digest) bool {
 	n.mutex.RLock()
 	_, ok := n.subscribers[*digest]
 	n.mutex.RUnlock()
@@ -328,7 +336,7 @@ func (n *Node) SubscribedDigest(digest *hash160digest) bool {
 // Subscribers retruns message receivers for given topic.
 func (n *Node) Subscribers(topic []byte) []io.Writer {
 	// TODO validate input
-	digest := hash160(topic)
+	digest := sha256sum(topic)
 	results := []io.Writer{}
 	n.mutex.RLock()
 	if receivers, ok := n.subscribers[digest]; ok {

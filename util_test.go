@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestMustNotBeNilStructPtr(t *testing.T) {
+func TestMustNotBeNilPtr(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("mustNotBeNil did not panic as expected")

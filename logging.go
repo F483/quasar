@@ -2,12 +2,11 @@ package quasar
 
 import (
 	"fmt"
-	// "time"
 )
 
 type logUpdate struct {
 	node   *Node
-	entry  *peerUpdate
+	entry  *update
 	target *pubkey
 }
 
@@ -15,6 +14,11 @@ type logEvent struct {
 	node   *Node
 	entry  *event
 	target *pubkey
+}
+
+func (e *logEvent) printState() {
+	// XXX temp debug hack
+	// fmt.Println(e.entry.TopicDigest, e.entry.Ttl, e.entry.Publishers)
 }
 
 type logger struct {
@@ -53,18 +57,18 @@ func newLogger(bufsize int) *logger {
 func (l *logger) updateSent(n *Node, f [][]byte, t *pubkey) {
 	if l != nil {
 		var id *pubkey
-		if n != nil {
+		if n != nil { // TODO clean up!
 			idv := n.net.id()
 			id = &idv
 		}
-		u := &peerUpdate{peer: id, filters: f}
+		u := &update{NodeId: id, Filters: f}
 		l.updatesSent <- &logUpdate{
 			node: n, entry: u, target: t,
 		}
 	}
 }
 
-func (l *logger) updateReceived(n *Node, u *peerUpdate) {
+func (l *logger) updateReceived(n *Node, u *update) {
 	if l != nil {
 		l.updatesReceived <- &logUpdate{
 			node: n, entry: u, target: nil,
@@ -72,7 +76,7 @@ func (l *logger) updateReceived(n *Node, u *peerUpdate) {
 	}
 }
 
-func (l *logger) updateSuccess(n *Node, u *peerUpdate) {
+func (l *logger) updateSuccess(n *Node, u *update) {
 	if l != nil {
 		l.updatesSuccess <- &logUpdate{
 			node: n, entry: u, target: nil,
@@ -80,7 +84,7 @@ func (l *logger) updateSuccess(n *Node, u *peerUpdate) {
 	}
 }
 
-func (l *logger) updateFail(n *Node, u *peerUpdate) {
+func (l *logger) updateFail(n *Node, u *update) {
 	if l != nil {
 		l.updatesFail <- &logUpdate{
 			node: n, entry: u, target: nil,
